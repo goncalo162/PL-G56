@@ -93,6 +93,9 @@ class Preprocessor:
             # pode identificar o rótulo sem confundir com a sintaxe da linguagem.
             
             # Ex: "10    DO I = 1, 5" -> "__LABEL__10 DO I = 1, 5"
+
+            # DUVIDA: avaliar se o pré-processador deve preservar colunas exatas do fixed-form
+            # ou normalizar a linha para simplificar o parser.
             built_line = f"__LABEL__{label_field} {code_field.strip()}" if label_field else code_field.strip()
 
             # 2. Para manter o output uniforme entre fixed-form e free-form, apenas mantemos
