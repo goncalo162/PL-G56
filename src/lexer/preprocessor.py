@@ -32,63 +32,84 @@ class Preprocessor:
         """
         lines = source_code.splitlines()
         processed_lines = []
-        
-        current_statement = ""
-        current_label = ""
+        previous_line_eligible_for_continuation = False
 
-        for line_number, line in enumerate(lines):
-            # Se a linha for mais curta que 72, fará padding mentalmente. Mas lidamos string a string.
+        for line in lines:
+
+            # Ignora linhas totalmente vazias (mas mantém o número de linhas para relatórios de erro)
             if not line.strip():
-                # Ignora linhas totalmente vazias
-                processed_lines.append("") 
-                continue
-
-            # 1. Comentários (coluna 1 com C ou *)
-            # Retornamos uma string vazia para manter o número de linhas igual e não quebrar
-            # os relatórios de erros ("Erro na linha X").
-            if line[0:1].upper() in ['C', '*']:
                 processed_lines.append("")
+                previous_line_eligible_for_continuation = False
                 continue
 
-            # Para linhas normais, precisamos separar as componentes lógicas.
-            # Lidar com o caso de linhas que não chegam sequer à coluna 6
+            # Comentários (coluna 1 com C ou *)
+            # Remove comentários inteiros, mas mantém o número de linhas para relatórios de erro
+            if line[0].upper() in ['C', '*']:
+                processed_lines.append("")
+                previous_line_eligible_for_continuation = False
+                continue
+
+            # Se a linha for mais curta que 72, fará padding.
             line_padded = line.ljust(72)
             
+            # Para o resto das linhas, precisamos de separar as componentes lógicas (label, caracter de continuação, código executável).
             label_field = line_padded[0:5].strip()
-            continuation_char = line_padded[5:6]
+            continuation_char = line_padded[5]
             code_field = line_padded[6:72]
 
-            # 2. Continuação de Linhas
-            # TODO: Melhorar no futuro a gestão de erros na linha original caso 
-            # uma linha de continuação provoque erro de sintaxe.
-            if continuation_char not in [' ', '0']:
-                # É uma linha de continuação. Removemos a pontuação newline anterior
-                # e apendamos ao statement atual.
-                # (Nota: o PLY vai precisar de adaptar-se aqui se as sub-linhas derem erro de linha, mas 
-                # a nível léxico, o Fortran encara tudo como um só statement)
-                
-                # Pop out a última linha processada para concatenar
-                if processed_lines:
+            # Continuação de Linhas
+            # TODO: Ver no futuro onde fazer a gestão de erros na linha original caso uma linha de continuação provoque erro de sintaxe.
+        
+            if continuation_char not in [' ', '0']: # É uma linha de continuação. 
+                # Se a continuação vier imediatamente após uma linha de código ou outra continuação válida,
+                # junta-se ao statement anterior.
+                if previous_line_eligible_for_continuation:
                     last_index = len(processed_lines) - 1
-                    # Apenas concatenamos na última linha válida
                     while last_index >= 0 and not processed_lines[last_index].strip():
                         last_index -= 1
-                    
+
                     if last_index >= 0:
                         processed_lines[last_index] += " " + code_field.strip()
-                        processed_lines.append("") # Deixar vazio na linha atual para manter contador
+                    else:
+                        processed_lines.append(line)
+
+                    processed_lines.append("")  # Deixar vazio na linha atual para manter contador
+                    previous_line_eligible_for_continuation = True
+                    continue
+                # Caso contrário, preservamos a linha original inteira (com o caractere de continuação) para depois tratar do erro de sintaxe.
+                processed_lines.append(line)
+                previous_line_eligible_for_continuation = False
                 continue
             
-            # Se chegamos aqui, é uma nova linha / statement.
-            # Convertê-la usando um formato intermédio para facilitar o Lexer
-            # Podemos simplesmente inserir o label seguido de dois pontos (ou outro token), 
-            # ou deixá-los explicitos.
+            # Se chegamos aqui, estamos a lidar com uma nova linha / statement.
+            # Convertê-la usando um formato intermédio para facilitar o Lexer.
+
+            # DUVIDA: ESCOLHER UMA DAS ABORDAGENS:
+
+            # 1. Usamos um token reservado para o label, porque um simples espaço poderia tornar
+            # ambíguo distinguir entre um label numérico e um número que começa o statement.
+            # Ex: em "10 DO I = 1" o 10 é um label; em "10 + 20" o 10 é um valor.
+            # O token especial __LABEL__ não existe em Fortran normal, então o lexer/parser
+            # pode identificar o rótulo sem confundir com a sintaxe da linguagem.
+            
+            # Ex: "10    DO I = 1, 5" -> "__LABEL__10 DO I = 1, 5"
+            built_line = f"__LABEL__{label_field} {code_field.strip()}" if label_field else code_field.strip()
+
+            # 2. Para manter o output uniforme entre fixed-form e free-form, apenas mantemos
+            # o label e o resto do código separados por espaço. A desambiguação
+            # entre label inicial e número de expressão fica a cargo do parser.
             
             # Ex: "10    DO I = 1, 5" -> "10 DO I = 1, 5"
-            built_line = f"{label_field} {code_field.strip()}" if label_field else code_field.strip()
+            # built_line = f"{label_field} {code_field.strip()}" if label_field else code_field.strip()
+
             processed_lines.append(built_line)
+            previous_line_eligible_for_continuation = True
 
         return '\n'.join(processed_lines)
+    
+    #TODO: Acho que dá para simplificar isto, ou pelo menos fazer uma lógica mais uniforme para as linhas de continuação nos dois formato
+    #porque um esta a usar um buffer e o outro a manter um contador de linhas elegíveis para continuação e ir dar append á ultima linha se for elegivel
+    # Talvez seja possível unificar a lógica de continuação e flush para ambos os formatos, ou pelo menos tornar mais consistente.
 
     @staticmethod
     def _process_free(source_code: str) -> str:
@@ -101,28 +122,46 @@ class Preprocessor:
         processed_lines = []
         
         buffer_line = ""
+        statement_start_line = None
+
+        def flush_buffer() -> None:
+            nonlocal buffer_line, statement_start_line
+            if statement_start_line is not None:
+                processed_lines[statement_start_line] = buffer_line.strip()
+                buffer_line = ""
+                statement_start_line = None
 
         for line in lines:
             if not line.strip():
+                flush_buffer()
                 processed_lines.append("")
                 continue
 
-            # Remover comentários: encontra o primeiro '!' fora de strings, mas 
-            # de forma simples só procuramos '!'
-            code_part = line.split('!', 1)[0].strip()
+            # Remover comentários: encontra o primeiro '!' fora de strings, mas de forma simples só procuramos '!'
+            code_part = line.split('!', 1)[0].strip() # divide a linha no primeiro '!' e usa a parte do código (index 0, antes do comentário)
             
             if not code_part:
+                flush_buffer()
                 processed_lines.append("")
                 continue
 
             # Verificar continuação '&'
             if code_part.endswith('&'):
+                if statement_start_line is None:
+                    statement_start_line = len(processed_lines)
+                    buffer_line = ""
+
                 buffer_line += code_part[:-1] + " "
                 processed_lines.append("") # Preservar layout de nº de linhas
-            else:
-                buffer_line += code_part
-                processed_lines.append(buffer_line.strip())
-                buffer_line = ""
+                continue
 
+            if statement_start_line is not None:
+                buffer_line += code_part
+                flush_buffer()
+                processed_lines.append("")
+            else:
+                processed_lines.append(code_part)
+
+        flush_buffer()
         return '\n'.join(processed_lines)
 
