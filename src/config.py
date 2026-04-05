@@ -39,7 +39,9 @@ OPERATORS = {
 }
 
 # Delimitadores
-DELIMITERS = {'(', ')', '[', ']', '{', '}', ',', '.', ':', ';'}
+DELIMITERS = {'(', ')', ',', ':', '.'}
+# '[', ']', '{', '}', ';'
+
 
 # Tamanho máximo das linhas (formato fixed usa max 72)
 MAX_LINE_LENGTH = 132
