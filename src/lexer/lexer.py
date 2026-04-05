@@ -34,57 +34,123 @@ class Lexer:
     """
 
     # --- PLY Regex Rules ---
-    # TODO: PLY exige uma variável ou propriedade 'tokens' (lista de strings).
-    # Deves incluir os listados no documento `tokens.py` + as KEYWORDS do `config.py`.
-    # Exemplo: tokens = ['IDENTIFIER', 'INTEGER_LITERAL', 'PLUS'] + list(KEYWORDS.values())
-    tokens = []
+    # PLY exige uma variável ou propriedade 'tokens' (lista de strings).
+    # Inclui todos os tipos de token do TokenType e as keywords do config.KEYWORDS.
+    tokens = [token.name for token in TokenType] + list(KEYWORDS)
 
-    # TODO: Definir caracteres a serem ignorados (e.g. t_ignore = ' \t')
+    # Ignora espaços e tabulações entre tokens
+    t_ignore = ' \t'
 
-    # TODO: Definir regras Regex simples para operadores. 
-    # O PLY identifica métodos ou strings a começar com 't_'
-    # Exemplo: t_PLUS = r'\+'
+    # Regras Regex simples para operadores aritméticos e delimitadores
+    t_POWER    = r'\*\*'
+    t_PLUS     = r'\+'
+    t_MINUS    = r'-'
+    t_MULTIPLY = r'\*'
+    t_DIVIDE   = r'/'
+    t_ASSIGN   = r'='
+    t_LPAREN   = r'\('
+    t_RPAREN   = r'\)'
+    t_COMMA    = r','
+    t_COLON    = r':'
+
+    # Operadores relacionais e lógicos
+    t_LT  = r'\.LT\.'
+    t_LE  = r'\.LE\.'
+    t_GT  = r'\.GT\.'
+    t_GE  = r'\.GE\.'
+    t_EQ  = r'\.EQ\.'
+    t_NE  = r'\.NE\.'
+    t_AND = r'\.AND\.'
+    t_OR  = r'\.OR\.'
+    t_NOT = r'\.NOT\.'
     
-    # TODO: Criar regras mais complexas através de funções para:
-    # 1. Identificadores (e verificar se dão match com alguma keyword de config.KEYWORDS)
-    # 2. Números (Inteiros e Reais)
-    # 3. Operadores Lógicos/Relacionais (.EQ., .TRUE.)
-    # 4. Strings ('texto')
+    # Regras complexas (Números Reais, Inteiros, Identificadores/Keywords, Strings, Lógicos)
+
+    def t_REAL_LITERAL(self, t):
+        r'\d+\.\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+'
+        t.value = float(t.value)
+        return t
+
+    def t_INTEGER_LITERAL(self, t):
+        r'\d+'
+        t.value = int(t.value)
+        return t
+
+    def t_LOGICAL_LITERAL(self, t):
+        r'(?i)\.(TRUE|FALSE)\.'
+        t.value = (t.value.upper() == '.TRUE.')
+        return t
+
+    def t_STRING_LITERAL(self, t):
+        r"'(?:[^']|'')*'"
+        # Fortran usa '' dentro da string para representar uma aspa escape
+        t.value = t.value[1:-1].replace("''", "'")
+        return t
+
+    def t_IDENTIFIER(self, t):
+        r'[a-zA-Z_][a-zA-Z0-9_]*'
+        upper_val = t.value.upper()
+        # Verificar se identificador é uma Keyword e re-atribuir o tipo
+        if upper_val in KEYWORDS:
+            t.type = upper_val
+        return t
     
-    # TODO: Regra para contabilizar quebras de linha (`t_newline`)
-    
-    # TODO: Regra para tratamento de erro (`t_error`)
+    # Regra para contabilizar quebras de linha mantendo formato do PLY
+    def t_newline(self, t):
+        r'\n+'
+        t.lexer.lineno += len(t.value)
+
+    # Regra para tratamento de erro
+    def t_error(self, t):
+        raise LexerError(f"Caractere inválido '{t.value[0]}' na linha {t.lexer.lineno}")
     
     def __init__(self):
         """Inicializa o lexer do PLY e o estado base."""
         self.line = 1
         self.column = 1
         self.tokens_list = []
-        # TODO: Descomentar e criar a instância verdadeira do PLY assim que os tokens estiverem definidos
-        # self.lexer = lex.lex(module=self)
+        # Cria a instância verdadeira do PLY assim que os tokens estiverem definidos
+        self.lexer = lex.lex(module=self)
     
-    def tokenize(self, source_code: str) -> list:
+    def tokenize(self, source_code: str):
         """
-        Tokeniza código-fonte Fortran aplicando o Pré-Processamento primeiro.
+        Atualiza o estado do lexer com o código pré-processado e devolve a 
+        instância do lexer do PLY (necessária para ser consumida pelo YACC).
         
         Args:
             source_code: String contendo o código Fortran cru
             
         Returns:
-            Lista de objetos Token
-            
-        Raises:
-            LexerError: Se encontrar um caractere inválido
+            Instância do PLY lexer pronta a gerar tokens.
         """
         # 1. PROCESSAMENTO INICIAL (Fixed ou Free form resolvido aqui)
         # Limpa comentários e concatena linhas de continuação antes de chegar ao Regex
         processed_code = Preprocessor.process(source_code, FORMAT)
         
         # 2. ALIMENTAR O LEXER COM CÓDIGO NORMALIZADO
-        # TODO: Passar o 'processed_code' para o ply.lex (ex: self.lexer.input(processed_code))
+        self.lexer.input(processed_code)
         
-        # 3. EXTRAIR TOKENS
-        # TODO: Iterar sobre self.lexer.token() e guardar numa lista até ser vazio.
-        # Retornar essa lista.
-            
-        return []
+        # 3. DEVOLVER O LEXER (Formato esperado pelo YACC)
+        return self.lexer
+
+    def get_tokens(self, source_code: str) -> list:
+        """
+        Gera uma lista com todos os objetos Token (custom class) extraídos do código.
+        Ideal para utilizar em testes isolados do lexer.
+        """
+        self.tokenize(source_code)
+        
+        tokens = []
+        while True:
+            t = self.lexer.token()
+            if not t:
+                break
+            # Cria um objeto Token personalizado 
+            token_obj = Token(
+                type=TokenType[t.type] if t.type in TokenType.__members__ else t.type,
+                value=t.value,
+                line=t.lineno if hasattr(t, 'lineno') else self.line,
+                column=t.lexpos if hasattr(t, 'lexpos') else self.column
+            )
+            tokens.append(token_obj)
+        return tokens
