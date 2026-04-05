@@ -77,7 +77,7 @@ class Lexer:
         return t
 
     def t_LOGICAL_LITERAL(self, t):
-        r'(?i)\.(TRUE|FALSE)\.'
+        r'\.(TRUE|FALSE|true|false)\.'
         t.value = (t.value.upper() == '.TRUE.')
         return t
 
@@ -112,34 +112,33 @@ class Lexer:
         # Cria a instância verdadeira do PLY assim que os tokens estiverem definidos
         self.lexer = lex.lex(module=self)
     
-    def tokenize(self, source_code: str):
+    def tokenize(self, source_code: str, preprocess: bool = True):
         """
         Atualiza o estado do lexer com o código pré-processado e devolve a 
         instância do lexer do PLY (necessária para ser consumida pelo YACC).
         
         Args:
             source_code: String contendo o código Fortran cru
-            
+            preprocess: Se True, aplica o pré-processador (default True)
         Returns:
             Instância do PLY lexer pronta a gerar tokens.
         """
-        # 1. PROCESSAMENTO INICIAL (Fixed ou Free form resolvido aqui)
-        # Limpa comentários e concatena linhas de continuação antes de chegar ao Regex
-        processed_code = Preprocessor.process(source_code, FORMAT)
-        
-        # 2. ALIMENTAR O LEXER COM CÓDIGO NORMALIZADO
+        # Se preprocess=True, aplica o pré-processador normalmente
+        if preprocess:
+            processed_code = Preprocessor.process(source_code, FORMAT)
+        else:
+            processed_code = source_code
+        # Alimenta o lexer com o código (pré-processado ou não)
         self.lexer.input(processed_code)
-        
-        # 3. DEVOLVER O LEXER (Formato esperado pelo YACC)
         return self.lexer
 
-    def get_tokens(self, source_code: str) -> list:
+    def get_tokens(self, source_code: str, preprocess: bool = False) -> list:
         """
         Gera uma lista com todos os objetos Token (custom class) extraídos do código.
         Ideal para utilizar em testes isolados do lexer.
+        Se preprocess=False, não aplica o pré-processador (útil para testes unitários do lexer puro).
         """
-        self.tokenize(source_code)
-        
+        self.tokenize(source_code, preprocess=preprocess)
         tokens = []
         while True:
             t = self.lexer.token()
@@ -154,3 +153,16 @@ class Lexer:
             )
             tokens.append(token_obj)
         return tokens
+
+#DUVIDA Opção 2: Pré-processador fora do Lexer (mais modular)
+# Nesta abordagem, o pré-processador seria chamado explicitamente antes do lexer, fora da classe Lexer.
+# Exemplo de uso:
+#   processed_code = Preprocessor.process(source_code, FORMAT)
+#   tokens = lexer.get_tokens(processed_code, preprocess=False)
+# Prós:
+#   - Separação clara de responsabilidades (SRP): cada componente faz só uma coisa.
+#   - Facilita testes unitários e manutenção.
+#   - O lexer pode ser reutilizado em outros contextos sem depender do pré-processador.
+# Contras:
+#   - O utilizador do Lexer precisa lembrar de sempre pré-processar o código antes.
+#   - Pode aumentar a complexidade do pipeline principal.

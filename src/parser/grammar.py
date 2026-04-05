@@ -226,12 +226,12 @@ LOGICAL_LIT     : '.TRUE.' | '.FALSE.'
 
 # Precedência dos Operadores (da menor para maior)
 PRECEDENCE = (
-    ('left', '.OR.'),
-    ('left', '.AND.'),
-    ('left', '.NOT.'),
-    ('left', '.LT.', '.LE.', '.GT.', '.GE.', '.EQ.', '.NE.'),
-    ('left', '+', '-'),
-    ('left', '*', '/'),
-    ('right', 'UMINUS', 'UNOT'),
-    ('right', '**'),
+    ('left', 'OR'), # .OR. tem menor precedência que .AND.
+    ('left', 'AND'), # .AND. tem menor precedência que .NOT.
+    ('left', 'NOT'), # .NOT. tem menor precedência que os relacionais
+    ('left', 'LT', 'LE', 'GT', 'GE', 'EQ', 'NE'), # .LT., .LE., .GT., .GE., .EQ., .NE. têm menor precedência que adição/subtração
+    ('left', 'PLUS', 'MINUS'), # + e - têm menor precedência que multiplicação/divisão
+    ('left', 'MULTIPLY', 'DIVIDE'), # * e / têm menor precedência que potência
+    ('right', 'UMINUS', 'UNOT'), # Operadores unários (negativo e .NOT.) têm maior precedência que os binários, mas menor que ** (potência)
+    ('right', 'POWER'), # ** tem maior precedência que unários
 )

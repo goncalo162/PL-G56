@@ -1,6 +1,7 @@
-# Compilador Fortran 77
 
-Um compilador para Fortran 77 (ANSI X3.9-1978) implementado em Python.
+# Projeto de Processamento de Linguagens — Compilador Fortran 77
+
+Compilador para Fortran 77 (ANSI X3.9-1978) desenvolvido no âmbito da unidade curricular de Processamento de Linguagens.
 
 ## Visão Geral
 
@@ -12,82 +13,29 @@ Este projeto implementa um compilador completo para Fortran 77 com as seguintes 
 4. **Geração de Código** - Produção de código intermediário
 5. **Otimização** (opcional) - Melhorias de eficiência
 
-## Estrutura do Projeto
 
-```
-src/
-├── config.py           # Configuração global
-├── exceptions.py       # Definições de exceções
-├── main.py            # Ponto de entrada
-├── lexer/
-│   ├── tokens.py      # Definição de tokens
-│   └── lexer.py       # Analisador léxico (ply.lex)
-├── parser/
-│   └── parser.py      # Analisador sintático (ply.yacc)
-├── ast/
-│   ├── nodes.py       # Nós da AST
-│   └── visitor.py     # Padrão Visitor
-├── semantic/
-│   ├── analyzer.py    # Análise semântica
-│   └── symbol_table.py # Tabela de símbolos (se necessário)
-├── codegen/
-│   ├── ir.py          # Representação intermediária
-│   └── ir_generator.py # Gerador de IR
-└── optimizer/
-    └── optimizer.py   # Otimizações
+## Instalação e Setup
 
-tests/
-├── test_compiler.py   # Testes unitários
-└── examples/          # Exemplos Fortran
-```
-
-## Instalação
-
-### Requisitos
-
-- Python 3.8+
-- ply
-
-### Setup
+1. **Criar ambiente virtual e instalar dependências:**
 
 ```bash
-# Instalar dependências
-pip install -r requirements.txt
-
-# Executar testes
-python -m pytest tests/
+make setup
+# Ativar ambiente virtual (sempre que fores trabalhar):
+source venv/bin/activate
 ```
 
-## Uso
-
-### Compilar um Arquivo
+2. **Executar testes:**
 
 ```bash
-python -m src.main programa.f
+make test-all           # Executa todos os testes
+make test-lexer         # Testa apenas o lexer
 ```
 
-### Exemplo
+3. **Executar o compilador:**
 
 ```bash
-python -m src.main tests/examples/hello.f
+python -m src.main caminho/para/ficheiro.f
 ```
-
-## Recursos Suportados
-
-### Obrigatórios (Nota 10)
-
-- [x] Declaração de tipos e variáveis
-- [x] Expressões aritméticas
-- [x] Operadores relacionais e lógicos
-- [x] IF-THEN-ELSE
-- [x] Ciclos DO com labels
-- [x] GOTO
-- [x] READ/PRINT
-
-### Opcionais - Valorização
-
-- [ ] SUBROUTINE e FUNCTION
-- [ ] Otimização de código
 
 ## Documentação
 
@@ -96,35 +44,8 @@ Ver pasta `docs/` para:
 - [Gramática](docs/grammar.md)
 - [Decisões de Design](docs/design_decisions.md)
 
-## Notas Importantes
+## Grupo 56
 
-### Formato de Código
-
-O compilador suporta **formato de colunas fixas** (fixed-form), que é o comportamento estrito do Standard Fortran 77 (ANSI X3.9-1978).
-As regras principais são:
-- Colunas 1-5: Reservadas para numeração de labels (ex: destinos de `GOTO` ou encerramento de `DO`).
-- Coluna 6: Continuação de linha (se tiver um caractere diferente de espaço ou zero).
-- Colunas 7-72: Código executável (as instruções).
-- Coluna 1: Se começar por `C`, `c`, `*` ou `!`, a linha é ignorada (comentário).
-
-Para alterar para formato livre (free-form), alterar em `src/config.py`:
-
-```python
-FORMAT = 'free'
-```
-
-### Padrões de Código
-
-- Cada módulo é independente e testável
-- Usar padrão **Visitor** para traversal da AST
-- Documentação inline para funcionalidades complexas
-- **Logger** para mensagens de depuração
-
-## Equipa
-
-Projeto de Processamento de Linguagens 2026 - PL-G56
-
-## Prazos
-
-- Entrega: 17/05/2026 às 23:59
-- Defesa: 01/06/2026 a 05/06/2026
+- A106804 - Alice Soares
+- A106914 - Gonçalo Martins
+- A107367 - João Azevedo
