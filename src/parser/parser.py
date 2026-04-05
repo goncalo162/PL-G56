@@ -12,6 +12,7 @@ Uso:
 
 from src.exceptions import ParserError
 from src.ast.nodes import Program
+from .grammar import PRECEDENCE 
 
 
 class Parser:
@@ -28,15 +29,11 @@ class Parser:
         # self.parser = yacc.yacc(module=self)
         pass
     
-    # TODO 1: Definir a precedência de operadores matemáticos e lógicos
-    # Exemplo prático para evitar ambiguidades da árvore (necessário no YACC em vez do LL(1))
-    # precedence = (
-    #     ('left', 'PLUS', 'MINUS'),
-    #     ('left', 'MULTIPLY', 'DIVIDE'),
-    # )
+    # Definição explícita da precedência dos operadores matemáticos e lógicos (importada de grammar.py)
+    precedence = PRECEDENCE
 
     # TODO 2: Criar as funções de produção (Gramática)
-    # Segundo o professor, tens de migrar de "parser que só reconhece" para "parser que constrói uma AST estruturada baseada em Classes".
+    # tens de migrar de "parser que só reconhece" para "parser que constrói uma AST estruturada baseada em Classes".
     # Exemplo para a raiz (Program):
     # def p_program(self, p):
     #     '''program : statement_list'''

@@ -123,14 +123,14 @@ class Lexer:
         Returns:
             Instância do PLY lexer pronta a gerar tokens.
         """
-        # 1. PROCESSAMENTO INICIAL (Fixed ou Free form resolvido aqui)
+        # PROCESSAMENTO INICIAL (Fixed ou Free form resolvido aqui)
         # Limpa comentários e concatena linhas de continuação antes de chegar ao Regex
         processed_code = Preprocessor.process(source_code, FORMAT)
         
-        # 2. ALIMENTAR O LEXER COM CÓDIGO NORMALIZADO
+        # ALIMENTAR O LEXER COM CÓDIGO NORMALIZADO
         self.lexer.input(processed_code)
         
-        # 3. DEVOLVER O LEXER (Formato esperado pelo YACC)
+        # DEVOLVER O LEXER (Formato esperado pelo YACC)
         return self.lexer
 
     def get_tokens(self, source_code: str) -> list:
