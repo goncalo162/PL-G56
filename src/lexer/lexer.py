@@ -77,7 +77,7 @@ class Lexer:
         return t
 
     def t_LOGICAL_LITERAL(self, t):
-        r'(?i)\.(TRUE|FALSE)\.'
+        r'\.(TRUE|FALSE|true|false)\.'
         t.value = (t.value.upper() == '.TRUE.')
         return t
 
