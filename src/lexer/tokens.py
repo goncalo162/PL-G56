@@ -24,11 +24,11 @@ class TokenType(Enum):
     KEYWORD = "KEYWORD"
     
     # Operadores aritméticos
-    PLUS = "PLUS"
-    MINUS = "MINUS"
-    MULTIPLY = "MULTIPLY"
-    DIVIDE = "DIVIDE"
-    POWER = "POWER"
+    PLUS = "PLUS"           # +
+    MINUS = "MINUS"         # -
+    MULTIPLY = "MULTIPLY"   # *
+    DIVIDE = "DIVIDE"       # /
+    POWER = "POWER"         # **
     
     # Operadores relacionais
     LT = "LT"  # .LT.
