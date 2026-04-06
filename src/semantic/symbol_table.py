@@ -17,12 +17,12 @@ class SymbolInfo:
     name: str
     type_name: str  # INTEGER, REAL, LOGICAL, CHARACTER, COMPLEX
     dimensions: Optional[list] = None  # Para arrays: [(1, 10), (1, 5)]
-    initial_value: Optional[Any] = None
-    is_parameter: bool = False
-    is_function: bool = False
-    return_type: Optional[str] = None
+    initial_value: Optional[Any] = None # Valor inicial para variáveis
+    is_parameter: bool = False # Se é um parâmetro de função/subrotina
+    is_function: bool = False # Se é uma função (para diferenciar de variáveis comuns)
+    return_type: Optional[str] = None # Tipo de retorno para funções
     parameters: Optional[list] = None  # Para funções
-    scope_level: int = 0
+    scope_level: int = 0 # Nível de escopo onde o símbolo foi declarado
     
     def __repr__(self):
         if self.is_function:
@@ -42,7 +42,7 @@ class SymbolTable:
     def __init__(self):
         """Inicializa com escopo global."""
         self.scopes = [{}]  # Escopo global
-        self.current_level = 0
+        self.current_level = 0 # Nível do escopo atual (0 = global)
     
     def declare(self, name: str, type_name: str, **kwargs) -> SymbolInfo:
         """
