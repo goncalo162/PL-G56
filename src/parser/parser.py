@@ -264,7 +264,8 @@ class Parser:
         p[0] = ContinueStatement()
 
     def p_goto_stmt(self, p):
-        '''goto_stmt : GOTO INTEGER_LITERAL'''
+        '''goto_stmt : GOTO INTEGER_LITERAL
+                     | GOTO LABEL'''
         # Cria um GOTO apontando para um label numérico.
         p[0] = GotoStatement(label=p[2])
 
@@ -338,23 +339,30 @@ class Parser:
 
     def p_do_stmt(self, p):
         '''do_stmt : DO IDENTIFIER ASSIGN expression COMMA expression statements ENDDO
+                   | DO LABEL IDENTIFIER ASSIGN expression COMMA expression statements ENDDO
                    | DO INTEGER_LITERAL IDENTIFIER ASSIGN expression COMMA expression statements ENDDO
+                   | DO IDENTIFIER ASSIGN expression COMMA expression statements LABEL CONTINUE
                    | DO IDENTIFIER ASSIGN expression COMMA expression statements INTEGER_LITERAL CONTINUE
+                   | DO LABEL IDENTIFIER ASSIGN expression COMMA expression statements LABEL CONTINUE
+                   | DO LABEL IDENTIFIER ASSIGN expression COMMA expression statements INTEGER_LITERAL CONTINUE
+                   | DO INTEGER_LITERAL IDENTIFIER ASSIGN expression COMMA expression statements LABEL CONTINUE
                    | DO INTEGER_LITERAL IDENTIFIER ASSIGN expression COMMA expression statements INTEGER_LITERAL CONTINUE'''
         # Reconhece ciclos DO com e sem label de continuação.
         if len(p) == 9:
             # DO without label: DO I = 1, 10 ... ENDDO
             p[0] = DoLoop(variable=Identifier(name=p[2]), start=p[4], end=p[6], body=p[7])
         elif len(p) == 10:
-            if isinstance(p[2], int):
-                # DO 10 I = 1, 10 ... ENDDO
+            # Could be: DO LABEL I = 1, 10 ... ENDDO (p[2] is label, p[3] is var)
+            # or: DO I = 1, 10 ... LABEL CONTINUE (p[2] is var, p[8] is label)
+            if isinstance(p[2], int) and isinstance(p[3], str):
+                # DO LABEL I = 1, 10 ... ENDDO
                 p[0] = DoLoop(variable=Identifier(name=p[3]), start=p[5], end=p[7], label=p[2], body=p[8])
             else:
-                # DO I = 1, 10 ... 10 CONTINUE
+                # DO I = 1, 10 ... LABEL CONTINUE
                 p[0] = DoLoop(variable=Identifier(name=p[2]), start=p[4], end=p[6], label=p[8], body=p[7])
         else:
-            # DO 10 I = 1, 10 ... 10 CONTINUE  (len=11)
-            p[0] = DoLoop(variable=Identifier(name=p[3]), start=p[5], end=p[7], label=p[2], body=p[8])
+            # DO LABEL I = 1, 10 ... LABEL CONTINUE (len=11)
+            p[0] = DoLoop(variable=Identifier(name=p[3]), start=p[5], end=p[7], label=p[9], body=p[8])
 
     def p_print_stmt(self, p):
         '''print_stmt : PRINT MULTIPLY COMMA expr_list

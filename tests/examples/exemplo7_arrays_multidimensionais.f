@@ -9,5 +9,6 @@ C     --------- EXEMPLO 7: ARRAYS MULTIDIMENSIONAIS ---------
          DO 150 J = 1, 3
             MATRIX(I, J) = I + J
             SOMA = SOMA + MATRIX(I, J)
-   150    CONTINUE
-   100 CONTINUE
+ 150      CONTINUE
+ 100   CONTINUE
+      END
