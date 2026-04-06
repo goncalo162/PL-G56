@@ -129,3 +129,6 @@ dmypy.json
 # Projeto específico
 parser.out
 parsetab.py
+
+# Documentação gerada
+docs/html/

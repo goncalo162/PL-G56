@@ -3,3 +3,4 @@ flake8
 ply
 pytest
 pytest-cov
+pdoc
