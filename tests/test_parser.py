@@ -909,6 +909,11 @@ class TestParserFromExamples(unittest.TestCase):
         tokens = self.lexer.tokenize(code, preprocess=False)
         return self.parser.parse(tokens)
     
+    def _parse_with_preprocess(self, code):
+        """Parse with preprocessing for example files that use fixed format."""
+        tokens = self.lexer.tokenize(code, preprocess=True)
+        return self.parser.parse(tokens)
+    
     def _read_example(self, filename):
         """Lê um arquivo de exemplo."""
         filepath = os.path.join(self.examples_dir, filename)
@@ -941,7 +946,7 @@ class TestParserFromExamples(unittest.TestCase):
         """Testa parsing de exemplo3_primo.f (Prime number check)."""
         code = self._read_example("exemplo3_primo.f")
         if code:
-            ast = self._parse(code)
+            ast = self._parse_with_preprocess(code)
             self.assertIsNotNone(ast)
             self.assertEqual(ast.name, "PRIMO")
     
@@ -949,7 +954,7 @@ class TestParserFromExamples(unittest.TestCase):
         """Testa parsing de exemplo5_conversor_bases.f com função."""
         code = self._read_example("exemplo5_conversor_bases.f")
         if code:
-            ast = self._parse(code)
+            ast = self._parse_with_preprocess(code)
             self.assertIsNotNone(ast)
             self.assertEqual(ast.name, "CONVERSOR")
             # Verifica se tem subprogramas
@@ -959,7 +964,7 @@ class TestParserFromExamples(unittest.TestCase):
         """Testa parsing de exemplo7_arrays_multidimensionais.f."""
         code = self._read_example("exemplo7_arrays_multidimensionais.f")
         if code:
-            ast = self._parse(code)
+            ast = self._parse_with_preprocess(code)
             self.assertIsNotNone(ast)
             self.assertEqual(ast.name, "ARRAYS")
     
@@ -967,7 +972,7 @@ class TestParserFromExamples(unittest.TestCase):
         """Testa parsing de exemplo8_subrotina.f com subrotina."""
         code = self._read_example("exemplo8_subrotina.f")
         if code:
-            ast = self._parse(code)
+            ast = self._parse_with_preprocess(code)
             self.assertIsNotNone(ast)
             self.assertEqual(ast.name, "SUBS")
             # Verifica se tem subprogramas
