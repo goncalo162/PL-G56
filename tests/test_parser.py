@@ -18,6 +18,7 @@ import unittest
 import os
 from src.parser.parser import Parser
 from src.lexer.lexer import Lexer
+from src.exceptions import ParserError
 from src.ast.nodes import (
     Program, VariableDeclaration, Assignment, Identifier,
     IfStatement, DoLoop, FunctionCall, BinaryOp, Literal,
@@ -1051,6 +1052,210 @@ class TestParserEdgeCases(unittest.TestCase):
         END"""
         ast = self._parse(code)
         self.assertIsNotNone(ast)
+
+
+class TestParserErrors(unittest.TestCase):
+    """Testes para detecção de erros sintáticos."""
+    
+    def setUp(self):
+        self.parser = Parser()
+        self.lexer = Lexer()
+    
+    def _parse(self, code):
+        """Helper para tokenizar e fazer parsing de código."""
+        tokens = self.lexer.tokenize(code, preprocess=False)
+        return self.parser.parse(tokens)
+    
+    def test_missing_end(self):
+        """Testa erro quando falta END no programa."""
+        code = """PROGRAM TEST
+        INTEGER X
+        X = 10"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_missing_program_name(self):
+        """Testa erro quando falta nome do programa."""
+        code = """PROGRAM
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_missing_endif(self):
+        """Testa erro quando falta ENDIF."""
+        code = """PROGRAM TEST
+        INTEGER X
+        IF (X .GT. 0) THEN
+            X = 1
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_missing_enddo(self):
+        """Testa erro quando falta ENDDO ou CONTINUE no DO."""
+        code = """PROGRAM TEST
+        INTEGER I
+        DO I = 1, 10
+            I = I + 1
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_missing_then_in_if(self):
+        """Testa erro quando falta THEN no IF."""
+        code = """PROGRAM TEST
+        INTEGER X
+        IF (X .GT. 0)
+            X = 1
+        ENDIF
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_invalid_assignment(self):
+        """Testa erro com atribuição incompleta."""
+        code = """PROGRAM TEST
+        INTEGER X
+        X =
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+
+    
+    def test_mismatched_parentheses(self):
+        """Testa erro com parênteses desbalanceados."""
+        code = """PROGRAM TEST
+        INTEGER X
+        X = (5 + 3
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_missing_variable_in_declaration(self):
+        """Testa erro com declaração incompleta."""
+        code = """PROGRAM TEST
+        INTEGER
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_invalid_expression_in_if(self):
+        """Testa erro com expressão inválida no IF."""
+        code = """PROGRAM TEST
+        INTEGER X
+        IF () THEN
+            X = 1
+        ENDIF
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_print_without_asterisk(self):
+        """Testa erro no PRINT sem formato (*)."""
+        code = """PROGRAM TEST
+        PRINT 5
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_read_without_asterisk(self):
+        """Testa erro no READ sem formato (*)."""
+        code = """PROGRAM TEST
+        INTEGER X
+        READ 5, X
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_invalid_goto_target(self):
+        """Testa erro com GOTO sem label."""
+        code = """PROGRAM TEST
+        GOTO
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_invalid_array_access(self):
+        """Testa acesso a array com lista vazia (interpretado como function call)."""
+        code = """PROGRAM TEST
+        INTEGER ARR(10), X
+        X = ARR()
+        END"""
+        # ARR() é sintaticamente válido como chamada de função
+        # O conflito semântico (array vs função) é erro de análise semântica
+        self.assertIsNotNone(self._parse(code))
+    
+    def test_function_call_without_parentheses(self):
+        """Testa erro com chamada de função sem parênteses."""
+        code = """PROGRAM TEST
+        INTEGER X
+        X = SQRT
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_duplicate_declarations(self):
+        """Testa se aceita declarações duplicadas (não é erro sintático)."""
+        code = """PROGRAM TEST
+        INTEGER X
+        INTEGER X
+        END"""
+        # Isto não é erro de sintaxe, é erro de semântica
+        # O parser deve aceitar, mas o analisador semântico rejeitaria
+        self.assertIsNotNone(self._parse(code))
+    
+    def test_elseif_without_if(self):
+        """Testa erro com ELSEIF sem IF."""
+        code = """PROGRAM TEST
+        ELSEIF (X .GT. 0) THEN
+            X = 1
+        ENDIF
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_bare_else(self):
+        """Testa erro com ELSE sem IF."""
+        code = """PROGRAM TEST
+        ELSE
+            X = 1
+        ENDIF
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_return_outside_function(self):
+        """Testa RETURN fora de função (sintacticamente válido, erro semântico)."""
+        code = """PROGRAM TEST
+        RETURN
+        END"""
+        # RETURN em programa é sintacticamente válido mas semanticamente errado
+        self.assertIsNotNone(self._parse(code))
+    
+    def test_continue_outside_loop(self):
+        """Testa CONTINUE fora de loop (sintacticamente válido, erro semântico)."""
+        code = """PROGRAM TEST
+        CONTINUE
+        END"""
+        # CONTINUE fora de loop é sintacticamente válido mas semanticamente errado
+        self.assertIsNotNone(self._parse(code))
+    
+    def test_invalid_type_spec(self):
+        """Testa tipo inválido em declaração."""
+        code = """PROGRAM TEST
+        INVALID X
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
+    
+    def test_missing_comma_in_list(self):
+        """Testa erro com falta de vírgula em lista."""
+        code = """PROGRAM TEST
+        INTEGER X Y Z
+        END"""
+        with self.assertRaises(ParserError):
+            self._parse(code)
 
 
 if __name__ == "__main__":

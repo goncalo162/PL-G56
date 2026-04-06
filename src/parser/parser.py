@@ -292,7 +292,8 @@ class Parser:
     def p_subscript_list(self, p):
         '''subscript_list : expression
                           | subscript_list COMMA expression'''
-        # Agrupamento de índices para acesso a arrays.
+        # Agrupamento de índices para acesso a arrays (NUNCA vazio).
+        # Arrays requerem pelo menos um índice.
         if len(p) == 2:
             p[0] = [p[1]]
         else:
