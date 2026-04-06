@@ -282,6 +282,66 @@ class TestSemanticAnalyzer(unittest.TestCase):
         result = self.analyzer.analyze(program)
         self.assertTrue(result)
     
+    def test_declaration_initial_value_type_error(self):
+        """Testa erro quando valor inicial não é compatível com o tipo."""
+        from src.ast.nodes import (Program, VariableDeclaration, Literal)
+        
+        program = Program(
+            name="test",
+            declarations=[
+                VariableDeclaration(
+                    name="X",
+                    type_name="INTEGER",
+                    initial_value=Literal(value=3.14, type_name="REAL")
+                )
+            ],
+            statements=[],
+            subprograms=[]
+        )
+        
+        result = self.analyzer.analyze(program)
+        self.assertFalse(result)
+        self.assertTrue(any("Atribuição inválida" in e for e in self.analyzer.errors))
+    
+    def test_goto_to_defined_label(self):
+        """Testa GOTO para label definido em DO loop."""
+        from src.ast.nodes import (Program, VariableDeclaration, DoLoop, GotoStatement,
+                                 Identifier, Literal)
+        
+        program = Program(
+            name="test",
+            declarations=[VariableDeclaration(name="I", type_name="INTEGER")],
+            statements=[
+                GotoStatement(label=100),
+                DoLoop(
+                    variable=Identifier(name="I"),
+                    start=Literal(value=1, type_name="INTEGER"),
+                    end=Literal(value=10, type_name="INTEGER"),
+                    label=100,
+                    body=[]
+                )
+            ],
+            subprograms=[]
+        )
+        
+        result = self.analyzer.analyze(program)
+        self.assertTrue(result)
+    
+    def test_goto_to_undefined_label_error(self):
+        """Testa erro quando GOTO aponta para label inexistente."""
+        from src.ast.nodes import (Program, GotoStatement)
+        
+        program = Program(
+            name="test",
+            declarations=[],
+            statements=[GotoStatement(label=200)],
+            subprograms=[]
+        )
+        
+        result = self.analyzer.analyze(program)
+        self.assertFalse(result)
+        self.assertTrue(any("GOTO para label não definido" in e for e in self.analyzer.errors))
+    
     def test_undeclared_variable_in_assignment(self):
         """Testa erro quando variável não é declarada."""
         from src.ast.nodes import (Program, Assignment, Identifier, Literal)
