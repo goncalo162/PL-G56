@@ -1,41 +1,40 @@
-.PHONY: help test-all test-lexer test-lexer-verbose test-lexer-summary test-lexer-quick test-coverage clean clean-all install lint setup venv
-	
-help:
+.PHONY: help test-all test-coverage clean clean-all install lint setup venv test-% test-%-verbose test-%-summary test-%-quick
 
+help:
 	@echo "Targets disponíveis:"
 	@echo ""
-	@echo "  make setup         - Cria venv e instala dependências"
-	@echo "  make test-all          - Executa todos os testes da pasta tests"
-	@echo "  make test-lexer    - Executa apenas testes do lexer"
-	@echo "  make test-lexer-verbose - Testes do lexer com saída detalhada"
-	@echo "  make test-lexer-summary - Resumo dos testes do lexer"
-	@echo "  make test-lexer-quick   - Testes do lexer (modo rápido)"
-	@echo "  make test-coverage      - Gera relatório de cobertura"
-	@echo "  make install            - Instala dependências (venv ativo)"
-	@echo "  make venv               - Cria ambiente virtual"
-	@echo "  make lint               - Verifica código com linter"
-	@echo "  make clean              - Remove ficheiros de cache"
-	@echo "  make clean-all          - Limpeza completa"
+	@echo "  make setup            - Cria venv e instala dependências"
+	@echo "  make test-all         - Executa todos os testes da pasta tests"
+	@echo "  make test-x           - Executa tests/test_x.py (ex: test-parser, test-lexer, ...)"
+	@echo "  make test-x-verbose   - Executa tests/test_x.py com saída detalhada"
+	@echo "  make test-x-summary   - Executa tests/test_x.py com resumo"
+	@echo "  make test-x-quick     - Executa tests/test_x.py em modo rápido"
+	@echo "  make test-coverage    - Gera relatório de cobertura"
+	@echo "  make install          - Instala dependências (venv ativo)"
+	@echo "  make venv             - Cria ambiente virtual"
+	@echo "  make lint             - Verifica código com linter"
+	@echo "  make clean            - Remove ficheiros de cache"
+	@echo "  make clean-all        - Limpeza completa"
 
 
 test-all:
 	@echo "Executando suite completa de testes..."
 	python3 -m pytest tests/ -v --tb=short
 
-test-lexer:
-	python3 -m pytest tests/test_lexer.py -v --tb=short
+# Targets dinâmicos para ficheiros de teste individuais
+TEST_FILE=$(word 1,$(subst -, ,$*))
 
+test-%: 
+	python3 -m pytest tests/test_$(TEST_FILE).py -v --tb=short
 
-test-lexer-verbose:
-	python3 -m pytest tests/test_lexer.py -vv --tb=long -s
+test-%-verbose:
+	python3 -m pytest tests/test_$(TEST_FILE).py -vv --tb=long -s
 
+test-%-summary:
+	python3 -m pytest tests/test_$(TEST_FILE).py -v --tb=line
 
-test-lexer-summary:
-	python3 -m pytest tests/test_lexer.py -v --tb=line
-
-
-test-lexer-quick:
-	python3 -m pytest tests/test_lexer.py -q
+test-%-quick:
+	python3 -m pytest tests/test_$(TEST_FILE).py -q
 
 test-coverage:
 	coverage run -m pytest tests/test_lexer.py || true
