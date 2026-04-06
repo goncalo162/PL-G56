@@ -22,19 +22,17 @@ test-all:
 	python3 -m pytest tests/ -v --tb=short
 
 # Targets dinâmicos para ficheiros de teste individuais
-TEST_FILE=$(word 1,$(subst -, ,$*))
+test-verbose-%:
+	python3 -m pytest tests/test_$*.py -vv --tb=long -s
 
-test-%: 
-	python3 -m pytest tests/test_$(TEST_FILE).py -v --tb=short
+test-summary-%:
+	python3 -m pytest tests/test_$*.py -v --tb=line
 
-test-%-verbose:
-	python3 -m pytest tests/test_$(TEST_FILE).py -vv --tb=long -s
+test-quick-%:
+	python3 -m pytest tests/test_$*.py -q
 
-test-%-summary:
-	python3 -m pytest tests/test_$(TEST_FILE).py -v --tb=line
-
-test-%-quick:
-	python3 -m pytest tests/test_$(TEST_FILE).py -q
+test-%:
+	python3 -m pytest tests/test_$*.py -v --tb=short
 
 test-coverage:
 	coverage run -m pytest tests/test_lexer.py || true
