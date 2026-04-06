@@ -87,6 +87,12 @@ class Lexer:
         t.value = t.value[1:-1].replace("''", "'")
         return t
 
+    def t_LABEL(self, t):
+        r'__LABEL__\d+'
+        # Extract the label number from __LABEL__XX
+        t.value = int(t.value.split('__LABEL__')[1])
+        return t
+
     def t_IDENTIFIER(self, t):
         r'[a-zA-Z_][a-zA-Z0-9_]*'
         upper_val = t.value.upper()

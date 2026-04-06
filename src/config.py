@@ -21,7 +21,7 @@ KEYWORDS = {
     'IF', 'THEN', 'ELSE', 'ELSEIF', 'ENDIF',
     'DO', 'CONTINUE', 'ENDDO', 'GOTO',
     'READ', 'WRITE', 'PRINT', 'FORMAT',
-    'OPEN', 'CLOSE', 'REWIND',
+    'OPEN', 'CLOSE', 'REWIND', 'STOP',
     'CALL', 'RETURN',
     'TRUE', 'FALSE',
     'MOD', 'ABS', 'MAX', 'MIN',

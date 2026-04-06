@@ -73,7 +73,7 @@ statements      : statement
 statement       : label_opt simple_statement
                 | label_opt control_statement
 
-label_opt       : INTEGER ':'
+label_opt       : INTEGER 
                 | /* empty */
 
 simple_statement: assignment
