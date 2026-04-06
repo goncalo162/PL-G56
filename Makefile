@@ -58,6 +58,6 @@ clean:
 	rm -rf **/__pycache__ **/*.pyc **/.pytest_cache **/.egg-info tests/lextab.py tests/parser.out
 
 clean-all: clean
-	rm -rf htmlcov/ .coverage coverage*.xml dist/ build/
+	rm -rf htmlcov/ .coverage coverage*.xml dist/ build/ docs/html/
 
 
