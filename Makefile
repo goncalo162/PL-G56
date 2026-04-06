@@ -1,4 +1,4 @@
-.PHONY: help test-all test-coverage clean clean-all install lint setup venv test-% test-%-verbose test-%-summary test-%-quick
+.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs test-% test-%-verbose test-%-summary test-%-quick
 
 help:
 	@echo "Targets disponíveis:"
@@ -13,6 +13,7 @@ help:
 	@echo "  make install          - Instala dependências (venv ativo)"
 	@echo "  make venv             - Cria ambiente virtual"
 	@echo "  make lint             - Verifica código com linter"
+	@echo "  make docs             - Gera documentação HTML em docs/html"
 	@echo "  make clean            - Remove ficheiros de cache"
 	@echo "  make clean-all        - Limpeza completa"
 
@@ -53,6 +54,12 @@ setup: venv install
 
 lint:
 	flake8 src/ tests/ --max-line-length=120
+
+docs:
+	@echo "Gerando documentação HTML em docs/html..."
+	@mkdir -p docs/html
+	@python3 -m pdoc -o docs/html src
+	@echo "Documentação gerada em docs/html/"
 
 clean:
 	rm -rf **/__pycache__ **/*.pyc **/.pytest_cache **/.egg-info tests/lextab.py tests/parser.out
