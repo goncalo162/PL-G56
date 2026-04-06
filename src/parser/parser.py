@@ -45,7 +45,9 @@ from src.ast.nodes import (
     FunctionCall,
     ArrayAccess
 )
-from .grammar import PRECEDENCE 
+from .grammar import PRECEDENCE
+from src.lexer.tokens import TokenType
+from src.config import KEYWORDS
 
 
 class Parser:
@@ -56,14 +58,20 @@ class Parser:
     Utiliza análise bottom-up (shift-reduce) com base na especificação.
     """
     
+    # Lista de tokens necessária para o PLY yacc
+    tokens = [token.name for token in TokenType] + list(KEYWORDS)
+    
+    # Definição da precedência importada para resolver os Shift/Reduce conflicts
+    precedence = PRECEDENCE
+    
+    # Símbolo inicial da gramática
+    start = 'program'
+    
     def __init__(self):
         """Inicializa o parser associando o contexto (classe actual)."""
         # Cria o parser PLY apenas uma vez, mantendo-o no estado do objeto.
         if not hasattr(self, 'parser') or self.parser is None:
             self.parser = yacc.yacc(module=self)
-            
-    # Definição da precedência importada para resolver os Shift/Reduce conflicts
-    precedence = PRECEDENCE
 
     # ====================================================
     # Regras de Estrutura Inicial
@@ -211,8 +219,7 @@ class Parser:
                             | continue_stmt
                             | goto_stmt
                             | return_stmt
-                            | stop_stmt'''
-        # Reconhece um statement simples sem controlo de fluxo.
+                            | stop_stmt'''        # Reconhece um statement simples sem controlo de fluxo.
         p[0] = p[1]
 
     def p_control_statement(self, p):
@@ -245,7 +252,7 @@ class Parser:
         p[0] = ContinueStatement()
 
     def p_goto_stmt(self, p):
-        '''goto_stmt : GOTO '''
+        '''goto_stmt : GOTO INTEGER_LITERAL'''
         # Cria um GOTO apontando para um label numérico.
         p[0] = GotoStatement(label=p[2])
 
@@ -256,7 +263,7 @@ class Parser:
 
     def p_stop_stmt(self, p):
         '''stop_stmt : STOP'''
-        # Stop is basically return main exit
+        # STOP é um comando de término de execução em Fortran.
         p[0] = ReturnStatement()
 
     def p_assignment(self, p):
