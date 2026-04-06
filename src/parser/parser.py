@@ -83,11 +83,14 @@ class Parser:
         pass
 
     def p_program(self, p):
-        '''program : PROGRAM IDENTIFIER declarations statements END
-                   | PROGRAM IDENTIFIER declarations statements subprograms END'''
-        # Nó raiz da árvore. Apanha o nome (p[2]), as declarações e instruções e envolve-os.
-        subs = p[5] if len(p) == 6 and type(p[5]) == list else []
-        p[0] = Program(name=p[2], declarations=p[3], statements=p[4], subprograms=subs)
+        '''program : PROGRAM IDENTIFIER declarations statements END subprograms_opt'''
+        # Nó raiz da árvore. O programa principal seguido de opcional subprogramas.
+        p[0] = Program(name=p[2], declarations=p[3], statements=p[4], subprograms=p[6] or [])
+    
+    def p_subprograms_opt(self, p):
+        '''subprograms_opt : subprograms
+                           | empty'''
+        p[0] = p[1]
 
     # ====================================================
     # Subprogramas
@@ -160,7 +163,15 @@ class Parser:
         '''declaration : type_spec var_list'''
         # Mapeia multiplas variáveis definidas numa mesma linha para nós independentes (ex: INTEGER A,B).
         type_name = p[1]
-        p[0] = [VariableDeclaration(name=var_name, type_name=type_name) for var_name in p[2]]
+        declarations = []
+        for var in p[2]:
+            if isinstance(var, dict):
+                # Array declaration
+                declarations.append(VariableDeclaration(name=var['name'], type_name=type_name, dimensions=var.get('dims')))
+            elif isinstance(var, str):
+                # Simple variable
+                declarations.append(VariableDeclaration(name=var, type_name=type_name))
+        p[0] = declarations
 
     def p_type_spec(self, p):
         '''type_spec : INTEGER
@@ -172,9 +183,9 @@ class Parser:
         p[0] = p[1]
 
     def p_var_list(self, p):
-        '''var_list : var_list COMMA IDENTIFIER
-                    | IDENTIFIER'''
-        # Constroi a lista de nomes puros de identificadores (string) separados por vírgula.
+        '''var_list : var_list COMMA var_decl
+                    | var_decl'''
+        # Constroi a lista que pode conter identificadores simples ou declarações de array.
         if len(p) == 4:
             p[0] = p[1] + [p[3]]
         else:
@@ -205,7 +216,8 @@ class Parser:
         p[0] = p[2]
 
     def p_label_opt(self, p):
-        '''label_opt : 
+        '''label_opt : LABEL
+                     | INTEGER_LITERAL
                      | empty'''
         # Captura instruções rotuladas no estilo Fortran de labels numéricos opcionais.
         p[0] = p[1]
@@ -326,14 +338,22 @@ class Parser:
 
     def p_do_stmt(self, p):
         '''do_stmt : DO IDENTIFIER ASSIGN expression COMMA expression statements ENDDO
-                   | DO  IDENTIFIER ASSIGN expression COMMA expression statements  CONTINUE'''
-        # Reconhece ciclos DO sem e com label de continuação.
+                   | DO INTEGER_LITERAL IDENTIFIER ASSIGN expression COMMA expression statements ENDDO
+                   | DO IDENTIFIER ASSIGN expression COMMA expression statements INTEGER_LITERAL CONTINUE
+                   | DO INTEGER_LITERAL IDENTIFIER ASSIGN expression COMMA expression statements INTEGER_LITERAL CONTINUE'''
+        # Reconhece ciclos DO com e sem label de continuação.
         if len(p) == 9:
-            # No DO label
+            # DO without label: DO I = 1, 10 ... ENDDO
             p[0] = DoLoop(variable=Identifier(name=p[2]), start=p[4], end=p[6], body=p[7])
+        elif len(p) == 10:
+            if isinstance(p[2], int):
+                # DO 10 I = 1, 10 ... ENDDO
+                p[0] = DoLoop(variable=Identifier(name=p[3]), start=p[5], end=p[7], label=p[2], body=p[8])
+            else:
+                # DO I = 1, 10 ... 10 CONTINUE
+                p[0] = DoLoop(variable=Identifier(name=p[2]), start=p[4], end=p[6], label=p[8], body=p[7])
         else:
-            # DO label
-            # do_stmt : DO NUMBER ID = exp , exp do_body NUMBER CONTINUE
+            # DO 10 I = 1, 10 ... 10 CONTINUE  (len=11)
             p[0] = DoLoop(variable=Identifier(name=p[3]), start=p[5], end=p[7], label=p[2], body=p[8])
 
     def p_print_stmt(self, p):
@@ -349,15 +369,23 @@ class Parser:
             p[0] = PrintStatement(expressions=[])
 
     def p_read_stmt(self, p):
-        '''read_stmt : READ MULTIPLY COMMA io_list
-                     | READ MULTIPLY io_list
-                     | READ LPAREN io_spec RPAREN io_list'''
+        '''read_stmt : READ MULTIPLY io_list
+                     | READ MULTIPLY
+                     | READ LPAREN io_spec RPAREN io_list
+                     | READ LPAREN io_spec RPAREN'''
         # Constrói instruções READ com unidade e lista de variáveis.
-        if len(p) >= 5:
-            io_list = p[4] if p[2] == '*' else p[5]
-            p[0] = ReadStatement(unit=Literal(value='*', type_name='CHARACTER'), variables=io_list)
-        else:
+        if len(p) == 4:
+            # READ * io_list
             p[0] = ReadStatement(unit=Literal(value='*', type_name='CHARACTER'), variables=p[3])
+        elif len(p) == 3:
+            # READ *
+            p[0] = ReadStatement(unit=Literal(value='*', type_name='CHARACTER'), variables=[])
+        elif len(p) == 6:
+            # READ (io_spec) io_list
+            p[0] = ReadStatement(unit=Literal(value='*', type_name='CHARACTER'), variables=p[5])
+        else:
+            # READ (io_spec)
+            p[0] = ReadStatement(unit=Literal(value='*', type_name='CHARACTER'), variables=[])
 
     def p_io_spec(self, p):
         '''io_spec : MULTIPLY
@@ -369,10 +397,14 @@ class Parser:
 
     def p_io_list(self, p):
         '''io_list : io_item
-                   | io_list COMMA io_item'''
+                   | io_list COMMA io_item
+                   | empty'''
         # Lista de itens I/O para READ/WRITE.
         if len(p) == 2:
-            p[0] = [p[1]]
+            if p[1] is None:
+                p[0] = []
+            else:
+                p[0] = [p[1]]
         else:
             p[0] = p[1] + [p[3]]
 
@@ -390,12 +422,18 @@ class Parser:
 
     def p_expr_list(self, p):
         '''expr_list : expr_list COMMA expression
-                     | expression'''
+                     | expression
+                     | empty'''
         # Lista agregadora de expressões usada tipicamente para invocar Print ou functions parameters.
         if len(p) == 4:
             p[0] = p[1] + [p[3]]
+        elif len(p) == 2:
+            if p[1] is None:
+                p[0] = []
+            else:
+                p[0] = [p[1]]
         else:
-            p[0] = [p[1]]
+            p[0] = []
 
     def p_expression_binop(self, p):
         '''expression : expression PLUS expression
@@ -427,9 +465,33 @@ class Parser:
         p[0] = p[2]
         
     def p_expression_function_call(self, p):
-        '''expression : IDENTIFIER LPAREN expr_list RPAREN'''
-        # Chamada de função como expressão
-        p[0] = FunctionCall(function_name=p[1], arguments=p[3])
+        '''expression : IDENTIFIER LPAREN expr_list RPAREN
+                      | MOD LPAREN expression COMMA expression RPAREN
+                      | MAX LPAREN expr_list RPAREN
+                      | MIN LPAREN expr_list RPAREN
+                      | ABS LPAREN expression RPAREN
+                      | SQRT LPAREN expression RPAREN
+                      | SIN LPAREN expression RPAREN
+                      | COS LPAREN expression RPAREN
+                      | EXP LPAREN expression RPAREN
+                      | LOG LPAREN expression RPAREN
+                      | INT LPAREN expression RPAREN
+                      | REAL LPAREN expression RPAREN
+                      | NINT LPAREN expression RPAREN'''
+        # Chamada de função como expressão, incluindo funções built-in
+        if len(p) == 5:
+            if p[1] in ('MOD', 'MAX', 'MIN', 'ABS', 'SQRT', 'SIN', 'COS', 'EXP', 'LOG', 'INT', 'REAL', 'NINT'):
+                # Built-in function
+                if p[1] == 'MOD':
+                    p[0] = FunctionCall(function_name=p[1], arguments=[p[3], p[5]])
+                else:
+                    p[0] = FunctionCall(function_name=p[1], arguments=[p[3]] if p[1] != 'MAX' and p[1] != 'MIN' else p[3])
+            else:
+                # User-defined function
+                p[0] = FunctionCall(function_name=p[1], arguments=p[3])
+        else:
+            # MAX or MIN with expr_list
+            p[0] = FunctionCall(function_name=p[1], arguments=p[3])
         
     def p_expression_literal(self, p):
         '''expression : INTEGER_LITERAL
@@ -450,6 +512,11 @@ class Parser:
         '''expression : IDENTIFIER'''
         # Folha que resolve qualquer referência a variável ou acesso numa estrutura.
         p[0] = Identifier(name=p[1])
+
+    def p_expression_array_access(self, p):
+        '''expression : IDENTIFIER LPAREN subscript_list RPAREN'''
+        # Acesso a array como expressão
+        p[0] = ArrayAccess(name=p[1], indices=p[3])
 
     # ===== Regras adicionais da gramática =====
 
