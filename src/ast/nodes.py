@@ -169,3 +169,56 @@ class PrintStatement(ASTNode):
     
     def accept(self, visitor):
         return visitor.visit_print_statement(self)
+
+
+@dataclass
+class CallStatement(ASTNode):
+    """Representa um CALL (chamada a subrotina)."""
+    subroutine: str
+    arguments: List[ASTNode] = field(default_factory=list)
+    
+    def accept(self, visitor):
+        if hasattr(visitor, 'visit_call_statement'):
+            return visitor.visit_call_statement(self)
+        return None
+
+
+@dataclass
+class ReturnStatement(ASTNode):
+    """Representa um RETURN."""
+    
+    def accept(self, visitor):
+        if hasattr(visitor, 'visit_return_statement'):
+            return visitor.visit_return_statement(self)
+        return None
+
+@dataclass
+class ContinueStatement(ASTNode):
+    """Representa um CONTINUE."""
+    
+    def accept(self, visitor):
+        if hasattr(visitor, 'visit_continue_statement'):
+            return visitor.visit_continue_statement(self)
+        return None
+
+@dataclass
+class FunctionCall(ASTNode):
+    """Representa uma chamada de função dentro de uma expressão (ex: MOD(X,Y))."""
+    function_name: str
+    arguments: List[ASTNode] = field(default_factory=list)
+    
+    def accept(self, visitor):
+        if hasattr(visitor, 'visit_function_call'):
+            return visitor.visit_function_call(self)
+        return None
+
+@dataclass
+class ArrayAccess(Identifier):
+    """Representa o acesso a um elemento de um array."""
+    indices: List[ASTNode] = field(default_factory=list)
+
+    def accept(self, visitor):
+        if hasattr(visitor, 'visit_array_access'):
+            return visitor.visit_array_access(self)
+        return None
+
