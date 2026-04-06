@@ -48,6 +48,7 @@ class SemanticAnalyzer(ASTVisitor):
         # Usamos id(node) porque os nós AST não implementam __hash__.
         self.type_stack: Dict[int, str] = {} # Mapeia cada nó AST para seu tipo (INTEGER, REAL, etc)
         self.labels_defined: Dict[int, str] = {} # Mapeia cada label numérico para seu contexto
+        self.goto_labels: List[int] = [] # Labels referenciados por GOTO, para validar depois
         self.active_loops: List[int] = [] # Pilha de IDs de loops ativos (para validar CONTINUE/EXIT)
         self._node_counter = 0
     
@@ -108,6 +109,8 @@ class SemanticAnalyzer(ASTVisitor):
         if node.subprograms:
             for subprog in node.subprograms:
                 subprog.accept(self)
+        
+        self._validate_goto_labels()
     
     # ====================================================================
     # Declarações
@@ -322,20 +325,20 @@ class SemanticAnalyzer(ASTVisitor):
         self.active_loops.pop()
     
     def visit_goto_statement(self, node):
-        """Valida uma instrução GOTO.
-        
-        Atualmente apenas reservamos o local para futura validação de labels
-        e controle de saltos. Se o label não estiver definido, isso deve
-        ser tratado em análise posterior.
-        """
-        if node.label not in self.labels_defined:
-            # TODO: validar GOTO para labels ainda não definidos ou inválidos
-            pass
+        """Regista um GOTO para validação posterior de label."""
+        if node.label is not None:
+            self.goto_labels.append(node.label)
     
     def visit_continue_statement(self, node):
         """Valida CONTINUE: só deve existir dentro de um DO."""
         if not self.active_loops:
             self._add_error("CONTINUE fora de DO loop")
+
+    def _validate_goto_labels(self):
+        """Verifica se todos os labels referenciados por GOTO existem."""
+        for label in self.goto_labels:
+            if label not in self.labels_defined:
+                self._add_error(f"GOTO para label não definido: {label}")
     
     def visit_read_statement(self, node):
         """Valida um READ, garantindo que todas as variáveis existam."""
