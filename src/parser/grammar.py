@@ -73,7 +73,8 @@ statements      : statement
 statement       : label_opt simple_statement
                 | label_opt control_statement
 
-label_opt       : INTEGER 
+label_opt       : INTEGER
+                | LABEL
                 | /* empty */
 
 simple_statement: assignment
@@ -84,6 +85,7 @@ simple_statement: assignment
                 | 'CONTINUE'
                 | 'RETURN'
                 | 'GOTO' INTEGER
+                | 'GOTO' LABEL
                 | 'STOP'
 
 control_statement: if_stmt
@@ -145,6 +147,12 @@ do_stmt         : 'DO' label_opt IDENTIFIER '=' expression ',' expression step_o
                   statements
                   label_opt 'CONTINUE'
                 | 'DO' label_opt IDENTIFIER '=' expression ',' expression step_opt
+                  statements
+                  'ENDDO'
+                | 'DO' IDENTIFIER '=' expression ',' expression step_opt
+                  statements
+                  label_opt 'CONTINUE'
+                | 'DO' IDENTIFIER '=' expression ',' expression step_opt
                   statements
                   'ENDDO'
 
