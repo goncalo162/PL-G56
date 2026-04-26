@@ -19,9 +19,8 @@ from src.codegen.ir import IRInstruction, IRProgram, IROpcode
 class VMCodeGenerator:
     """Traduz um programa TAC para instruções da EWVM.
 
-    O gerador mantém três estruturas internas:
-    - `data_segment`: declarações da secção `.data`
-    - `vm_code`: instruções da secção `.text`
+    O gerador mantém duas estruturas internas:
+    - `vm_code`: instruções do programa
     - `symbol_map`: mapeamento de nomes para endereços estáticos
     """
 
@@ -31,7 +30,6 @@ class VMCodeGenerator:
     def _reset(self):
         """Limpa o estado interno antes de cada geração."""
         self.vm_code: List[str] = []
-        self.data_segment: List[str] = ["SECTION .data"]
         self.symbol_map: Dict[str, int] = {}
         self.next_address: int = 0
 
@@ -40,9 +38,8 @@ class VMCodeGenerator:
         self._reset()
         self._allocate_static_data(ir_program)
 
-        # O arranque é feito por START, seguido de salto para o main.
+         # O arranque é feito por START
         self.vm_code.append("start")
-        self.vm_code.append("jump main")
 
         for instr in ir_program.instructions:
             self._translate_instruction(instr, ir_program)
@@ -78,11 +75,10 @@ class VMCodeGenerator:
             return
 
         self.symbol_map[name] = self.next_address
-        self.data_segment.append(f"{name}: DS {size}")
         self.next_address += size
 
     def _allocate_static_data(self, ir_program: IRProgram):
-        """Aloca variáveis globais e temporários na secção de dados."""
+        """Aloca variáveis globais e temporários."""
         for name, info in ir_program.variables.items():
             dims = info.get("dims") if isinstance(info, dict) else None
             self._allocate_symbol(name, self._infer_allocation_size(dims))
@@ -92,11 +88,11 @@ class VMCodeGenerator:
                 self._allocate_symbol(instr.result)
 
     def _emit(self, line: str):
-        """Adiciona uma linha de código à secção `.text`."""
+        """Adiciona uma linha de código."""
         self.vm_code.append(line)
 
     def _emit_comment(self, text: str):
-        self._emit(f"; {text}")
+        self._emit(f"// {text}")
 
     def _is_integer(self, value: Any) -> bool:
         return isinstance(value, int) and not isinstance(value, bool)
@@ -129,7 +125,6 @@ class VMCodeGenerator:
             if operand in self.symbol_map:
                 self._emit(f"pushg {self.symbol_map[operand]}")
                 return
-
             self._emit(f'pushs "{operand}"')
             return
 
@@ -170,13 +165,13 @@ class VMCodeGenerator:
             IROpcode.DIV: "div",
             IROpcode.MOD: "mod",
             IROpcode.POW: "pow",
-            IROpcode.LT: "inf",
-            IROpcode.LE: "infeq",
-            IROpcode.GT: "sup",
-            IROpcode.GE: "supeq",
-            IROpcode.EQ: "equal",
+            IROpcode.LT:  "inf",
+            IROpcode.LE:  "infeq",
+            IROpcode.GT:  "sup",
+            IROpcode.GE:  "supeq",
+            IROpcode.EQ:  "equal",
             IROpcode.AND: "and",
-            IROpcode.OR: "or",
+            IROpcode.OR:  "or",
         }
 
         float_map = {
@@ -184,24 +179,23 @@ class VMCodeGenerator:
             IROpcode.SUB: "fsub",
             IROpcode.MUL: "fmul",
             IROpcode.DIV: "fdiv",
-            IROpcode.LT: "finf",
-            IROpcode.LE: "finfeq",
-            IROpcode.GT: "fsup",
-            IROpcode.GE: "fsupeq",
-            IROpcode.EQ: "equal",
+            IROpcode.LT:  "finf",
+            IROpcode.LE:  "finfeq",
+            IROpcode.GT:  "fsup",
+            IROpcode.GE:  "fsupeq",
+            IROpcode.EQ:  "equal",
             IROpcode.AND: "and",
-            IROpcode.OR: "or",
+            IROpcode.OR:  "or",
         }
 
         mnemonic = float_map.get(opcode) if use_float else int_map.get(opcode)
         if mnemonic is None:
-            self._emit(f"; unsupported binary opcode {opcode.value}")
+            self._emit_comment(f"unsupported binary opcode {opcode.value}")
             return
 
         self._emit(mnemonic)
 
     def _emit_store_result(self, name: str):
-        """Guarda o topo da pilha numa variável ou temporário."""
         if name not in self.symbol_map:
             self._allocate_symbol(name)
         self._emit(f"storeg {self.symbol_map[name]}")
@@ -226,7 +220,7 @@ class VMCodeGenerator:
             self._emit("writei")
 
     def _emit_read(self, result: Optional[str], ir_program: IRProgram):
-        """Lê da entrada e converte para o tipo esperado quando útil."""
+        """Lê da entrada e converte para o tipo esperado."""
         self._emit("read")
         if result is None:
             return
@@ -253,11 +247,12 @@ class VMCodeGenerator:
                 self._store_result(instr.result)
             return
 
+
         self._push_operand(instr.result, ir_program)
         self._emit("store 0")
 
     def _emit_call(self, instr: IRInstruction):
-        """Emite chamada de procedimento/função conforme a documentação."""
+        """Emite chamada de procedimento/função."""
         self._emit(f"pusha {instr.arg1}")
         self._emit("call")
         if instr.result:
@@ -270,15 +265,16 @@ class VMCodeGenerator:
         self._emit("return")
 
     def _format_output(self) -> str:
-        """Junta secção de dados e secção de código num único texto."""
-        text_segment = ["SECTION .text"]
-        text_segment.extend(self.vm_code)
-        return "\n".join(self.data_segment + [""] + text_segment)
+        """Junta todas as linhas num único texto."""
+        return "\n".join(self.vm_code)
 
     def _translate_instruction(self, instr: IRInstruction, ir_program: IRProgram):
-        """Traduz uma única instrução TAC para EWVM com `match/case`."""
+        """Traduz uma única instrução TAC para EWVM."""
         match instr.opcode:
-            case IROpcode.ADD | IROpcode.SUB | IROpcode.MUL | IROpcode.DIV | IROpcode.MOD | IROpcode.POW | IROpcode.EQ | IROpcode.NE | IROpcode.LT | IROpcode.LE | IROpcode.GT | IROpcode.GE | IROpcode.AND | IROpcode.OR:
+            case (IROpcode.ADD | IROpcode.SUB | IROpcode.MUL | IROpcode.DIV |
+                  IROpcode.MOD | IROpcode.POW | IROpcode.EQ  | IROpcode.NE  |
+                  IROpcode.LT  | IROpcode.LE  | IROpcode.GT  | IROpcode.GE  |
+                  IROpcode.AND | IROpcode.OR):
                 self._emit_binary_opcode(instr.opcode, ir_program, instr.arg1, instr.arg2)
                 if instr.result:
                     self._emit_store_result(instr.result)
@@ -337,14 +333,10 @@ class VMCodeGenerator:
                 self._emit_return(instr, ir_program)
 
             case IROpcode.ENTER_SCOPE:
-                if instr.label == "main":
-                    self._emit_comment("enter main scope")
-                else:
-                    self._emit_comment(f"enter scope {instr.label or ''}".rstrip())
+                self._emit_comment(f"enter scope {instr.arg1 or ''}".rstrip())
 
             case IROpcode.LEAVE_SCOPE:
-                self._emit_comment(f"leave scope {instr.label or ''}".rstrip())
+                self._emit_comment(f"leave scope {instr.arg1 or ''}".rstrip())
 
             case _:
-                self._emit(f"; unsupported opcode {instr.opcode.name}")
-
+                self._emit_comment(f"unsupported opcode {instr.opcode.name}")
