@@ -55,7 +55,7 @@ class FortranCompiler:
             # 1. Análise Léxica
             logger.info("Fase 1: Análise Léxica")
             tokens = self.lexer.tokenize(source_code)
-            logger.info(f"Tokens gerados: {len(tokens)}")
+            logger.info(f"Tokens gerados!")
             
             # 2. Análise Sintática
             logger.info("Fase 2: Análise Sintática")
