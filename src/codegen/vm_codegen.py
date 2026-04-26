@@ -1,107 +1,349 @@
 """
-Geração de Código para Máquina Virtual
-======================================
+Geração de Código para a Máquina Virtual EWVM.
+===============================================
 
-Converte IR para código executável da máquina virtual.
+Converte TAC para assembly da EWVM seguindo a documentação da máquina.
+A implementação evita uma longa cadeia de `if/elif` usando despacho por
+opcode e pequenos handlers por família de instruções.
 """
 
-from src.codegen.ir import IRProgram, IRInstruction, IROpcode
+from __future__ import annotations
+
+from math import prod
+from typing import Any, Dict, List, Optional
+
+from src.codegen.ir import IRInstruction, IRProgram, IROpcode
 
 
 class VMCodeGenerator:
+    """Traduz um programa TAC para instruções da EWVM.
+
+    O gerador mantém três estruturas internas:
+    - `data_segment`: declarações da secção `.data`
+    - `vm_code`: instruções da secção `.text`
+    - `symbol_map`: mapeamento de nomes para endereços estáticos
     """
-    Gerador de código para máquina virtual.
-    
-    Converte programa em IR para instruções da VM.
-    """
-    
+
     def __init__(self):
-        self.instructions = []
-        self.memory_map = {}
-        self.next_address = 0
-    
+        self._reset()
+
+    def _reset(self):
+        """Limpa o estado interno antes de cada geração."""
+        self.vm_code: List[str] = []
+        self.data_segment: List[str] = ["SECTION .data"]
+        self.symbol_map: Dict[str, int] = {}
+        self.next_address: int = 0
+
     def generate_vm_code(self, ir_program: IRProgram) -> str:
-        """
-        Gera código VM a partir de IR.
-        
-        Args:
-            ir_program: Programa em representação intermediária
-            
-        Returns:
-            String contendo código VM
-        """
-        # TODO: Iterar sobre ir_program.instructions
-        # TODO: Fazer match a cada type de IROpcode
-        # TODO: Construir a string final baseada nas instruções exigidas pela VM do Projeto
-        
-        self._allocate_memory(ir_program)
-        self._emit_header(ir_program)
-        self._emit_instructions(ir_program.instructions)
-        
+        """Gera assembly EWVM a partir de um programa TAC."""
+        self._reset()
+        self._allocate_static_data(ir_program)
+
+        # O arranque é feito por START, seguido de salto para o main.
+        self.vm_code.append("start")
+        self.vm_code.append("jump main")
+
+        for instr in ir_program.instructions:
+            self._translate_instruction(instr, ir_program)
+
+        if not any(line.strip() == "stop" for line in self.vm_code):
+            self.vm_code.append("stop")
+
         return self._format_output()
-    
-    def _allocate_memory(self, ir_program: IRProgram):
-        """Aloca endereços de memória para variáveis."""
-        for var_name, var_info in ir_program.variables.items():
-            self.memory_map[var_name] = self.next_address
-            # Cada variável ocupa 1 word (simplificado)
-            self.next_address += 1
-    
-    def _emit_header(self, ir_program: IRProgram):
-        """Emite cabeçalho do código VM."""
-        self.instructions.append(f"; Programa: {ir_program.name}")
-        self.instructions.append(f"; Variáveis: {len(ir_program.variables)}")
-        self.instructions.append("")
-    
-    def _emit_instructions(self, ir_instructions):
-        """Emite instruções VM."""
-        for instr in ir_instructions:
-            self._emit_instruction(instr)
-    
-    def _emit_instruction(self, instr: IRInstruction):
-        """Emite uma instrução VM individual."""
-        # Mapear operações IR para instruções VM
-        opcode_map = {
-            IROpcode.ADD: "ADD",
-            IROpcode.SUB: "SUB",
-            IROpcode.MUL: "MUL",
-            IROpcode.DIV: "DIV",
-            IROpcode.MOD: "MOD",
-            IROpcode.AND: "AND",
-            IROpcode.OR: "OR",
-            IROpcode.NOT: "NOT",
-            IROpcode.LT: "LT",
-            IROpcode.LE: "LE",
-            IROpcode.GT: "GT",
-            IROpcode.GE: "GE",
-            IROpcode.EQ: "EQ",
-            IROpcode.NE: "NE",
-            IROpcode.ASSIGN: "MOV",
-            IROpcode.LABEL: "LABEL",
-            IROpcode.GOTO: "JMP",
-            IROpcode.COND_GOTO: "JZ",  # Jump if zero
-            IROpcode.READ: "READ",
-            IROpcode.WRITE: "WRITE",
-            IROpcode.CALL: "CALL",
-            IROpcode.RETURN: "RET",
+
+    def _infer_allocation_size(self, dimensions: Optional[List[Any]]) -> int:
+        """Calcula o tamanho a reservar para uma variável ou array."""
+        if not dimensions:
+            return 1
+
+        sizes: List[int] = []
+        for dimension in dimensions:
+            if isinstance(dimension, tuple) and len(dimension) == 2:
+                start, end = dimension
+                if isinstance(start, int) and isinstance(end, int):
+                    sizes.append(max(1, end - start + 1))
+                else:
+                    sizes.append(1)
+            elif isinstance(dimension, int):
+                sizes.append(max(1, dimension))
+            else:
+                sizes.append(1)
+
+        return max(1, prod(sizes))
+
+    def _allocate_symbol(self, name: str, size: int = 1):
+        """Reserva um bloco estático e associa-o a um nome simbólico."""
+        if name in self.symbol_map:
+            return
+
+        self.symbol_map[name] = self.next_address
+        self.data_segment.append(f"{name}: DS {size}")
+        self.next_address += size
+
+    def _allocate_static_data(self, ir_program: IRProgram):
+        """Aloca variáveis globais e temporários na secção de dados."""
+        for name, info in ir_program.variables.items():
+            dims = info.get("dims") if isinstance(info, dict) else None
+            self._allocate_symbol(name, self._infer_allocation_size(dims))
+
+        for instr in ir_program.instructions:
+            if isinstance(instr.result, str) and instr.result not in self.symbol_map:
+                self._allocate_symbol(instr.result)
+
+    def _emit(self, line: str):
+        """Adiciona uma linha de código à secção `.text`."""
+        self.vm_code.append(line)
+
+    def _emit_comment(self, text: str):
+        self._emit(f"; {text}")
+
+    def _is_integer(self, value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    def _is_float(self, value: Any) -> bool:
+        return isinstance(value, float)
+
+    def _operand_symbol_type(self, operand: Any, ir_program: IRProgram) -> Optional[str]:
+        if isinstance(operand, str) and operand in ir_program.variables:
+            info = ir_program.variables[operand]
+            if isinstance(info, dict):
+                return info.get("type")
+        return None
+
+    def _push_operand(self, operand: Any, ir_program: IRProgram):
+        """Empilha um operando literal ou o valor de uma variável."""
+        if isinstance(operand, bool):
+            self._emit(f"pushi {1 if operand else 0}")
+            return
+
+        if self._is_integer(operand):
+            self._emit(f"pushi {operand}")
+            return
+
+        if self._is_float(operand):
+            self._emit(f"pushf {operand}")
+            return
+
+        if isinstance(operand, str):
+            if operand in self.symbol_map:
+                self._emit(f"pushg {self.symbol_map[operand]}")
+                return
+
+            self._emit(f'pushs "{operand}"')
+            return
+
+        self._emit(f"pushs {operand}")
+
+    def _store_result(self, name: str):
+        """Guarda o topo da pilha numa variável ou temporário."""
+        if name not in self.symbol_map:
+            self._allocate_symbol(name)
+        self._emit(f"storeg {self.symbol_map[name]}")
+
+    def _should_use_float_ops(self, ir_program: IRProgram, arg1: Any, arg2: Any) -> bool:
+        """Detecta se uma operação deve usar opcodes de ponto flutuante."""
+        if self._is_float(arg1) or self._is_float(arg2):
+            return True
+        if isinstance(arg1, str) and self._operand_symbol_type(arg1, ir_program) == "REAL":
+            return True
+        if isinstance(arg2, str) and self._operand_symbol_type(arg2, ir_program) == "REAL":
+            return True
+        return False
+
+    def _emit_binary_opcode(self, opcode: IROpcode, ir_program: IRProgram, arg1: Any, arg2: Any):
+        """Emite uma operação binária com o mnemonic EWVM correcto."""
+        self._push_operand(arg1, ir_program)
+        self._push_operand(arg2, ir_program)
+
+        use_float = self._should_use_float_ops(ir_program, arg1, arg2)
+
+        if opcode == IROpcode.NE:
+            self._emit("equal")
+            self._emit("not")
+            return
+
+        int_map = {
+            IROpcode.ADD: "add",
+            IROpcode.SUB: "sub",
+            IROpcode.MUL: "mul",
+            IROpcode.DIV: "div",
+            IROpcode.MOD: "mod",
+            IROpcode.POW: "pow",
+            IROpcode.LT: "inf",
+            IROpcode.LE: "infeq",
+            IROpcode.GT: "sup",
+            IROpcode.GE: "supeq",
+            IROpcode.EQ: "equal",
+            IROpcode.AND: "and",
+            IROpcode.OR: "or",
         }
-        
-        vm_opcode = opcode_map.get(instr.opcode, "???")
-        
-        if instr.result:
-            self.instructions.append(
-                f"{vm_opcode} {instr.result} {instr.arg1} {instr.arg2}"
-            )
+
+        float_map = {
+            IROpcode.ADD: "fadd",
+            IROpcode.SUB: "fsub",
+            IROpcode.MUL: "fmul",
+            IROpcode.DIV: "fdiv",
+            IROpcode.LT: "finf",
+            IROpcode.LE: "finfeq",
+            IROpcode.GT: "fsup",
+            IROpcode.GE: "fsupeq",
+            IROpcode.EQ: "equal",
+            IROpcode.AND: "and",
+            IROpcode.OR: "or",
+        }
+
+        mnemonic = float_map.get(opcode) if use_float else int_map.get(opcode)
+        if mnemonic is None:
+            self._emit(f"; unsupported binary opcode {opcode.value}")
+            return
+
+        self._emit(mnemonic)
+
+    def _emit_store_result(self, name: str):
+        """Guarda o topo da pilha numa variável ou temporário."""
+        if name not in self.symbol_map:
+            self._allocate_symbol(name)
+        self._emit(f"storeg {self.symbol_map[name]}")
+
+    def _emit_write(self, operand: Any, ir_program: IRProgram):
+        """Emite WRITEI/WRITEF/WRITES conforme o tipo do operando."""
+        operand_type = self._operand_symbol_type(operand, ir_program)
+        if self._is_float(operand) or operand_type == "REAL":
+            self._push_operand(operand, ir_program)
+            self._emit("writef")
+        elif operand_type in {"CHARACTER", "STRING"}:
+            self._push_operand(operand, ir_program)
+            self._emit("writes")
+        elif isinstance(operand, str) and operand in self.symbol_map:
+            self._push_operand(operand, ir_program)
+            self._emit("writei")
+        elif isinstance(operand, str):
+            self._push_operand(operand, ir_program)
+            self._emit("writes")
         else:
-            args = []
-            if instr.arg1:
-                args.append(str(instr.arg1))
-            if instr.arg2:
-                args.append(str(instr.arg2))
-            if instr.label:
-                args.append(str(instr.label))
-            self.instructions.append(f"{vm_opcode} {' '.join(args)}")
-    
+            self._push_operand(operand, ir_program)
+            self._emit("writei")
+
+    def _emit_read(self, result: Optional[str], ir_program: IRProgram):
+        """Lê da entrada e converte para o tipo esperado quando útil."""
+        self._emit("read")
+        if result is None:
+            return
+
+        result_type = ir_program.variables.get(result, {}).get("type")
+        if result_type in {"INTEGER", "LOGICAL"}:
+            self._emit("atoi")
+        elif result_type == "REAL":
+            self._emit("atof")
+        self._store_result(result)
+
+    def _emit_array_access(self, opcode: IROpcode, instr: IRInstruction, ir_program: IRProgram):
+        """Traduz acesso a arrays com base em PADD + LOAD/STORE."""
+        if instr.arg1 not in self.symbol_map:
+            raise KeyError(f"Array desconhecido: {instr.arg1}")
+
+        self._emit(f"pushg {self.symbol_map[instr.arg1]}")
+        self._push_operand(instr.arg2, ir_program)
+        self._emit("padd")
+
+        if opcode == IROpcode.LOAD_ARRAY:
+            self._emit("load 0")
+            if instr.result:
+                self._store_result(instr.result)
+            return
+
+        self._push_operand(instr.result, ir_program)
+        self._emit("store 0")
+
+    def _emit_call(self, instr: IRInstruction):
+        """Emite chamada de procedimento/função conforme a documentação."""
+        self._emit(f"pusha {instr.arg1}")
+        self._emit("call")
+        if instr.result:
+            self._store_result(instr.result)
+
+    def _emit_return(self, instr: IRInstruction, ir_program: IRProgram):
+        """Emite RETURN com valor opcional."""
+        if instr.arg1 is not None:
+            self._push_operand(instr.arg1, ir_program)
+        self._emit("return")
+
     def _format_output(self) -> str:
-        """Formata saída final."""
-        return "\n".join(self.instructions)
+        """Junta secção de dados e secção de código num único texto."""
+        text_segment = ["SECTION .text"]
+        text_segment.extend(self.vm_code)
+        return "\n".join(self.data_segment + [""] + text_segment)
+
+    def _translate_instruction(self, instr: IRInstruction, ir_program: IRProgram):
+        """Traduz uma única instrução TAC para EWVM com `match/case`."""
+        match instr.opcode:
+            case IROpcode.ADD | IROpcode.SUB | IROpcode.MUL | IROpcode.DIV | IROpcode.MOD | IROpcode.POW | IROpcode.EQ | IROpcode.NE | IROpcode.LT | IROpcode.LE | IROpcode.GT | IROpcode.GE | IROpcode.AND | IROpcode.OR:
+                self._emit_binary_opcode(instr.opcode, ir_program, instr.arg1, instr.arg2)
+                if instr.result:
+                    self._emit_store_result(instr.result)
+
+            case IROpcode.ASSIGN:
+                self._push_operand(instr.arg1, ir_program)
+                if instr.result:
+                    self._emit_store_result(instr.result)
+
+            case IROpcode.UMINUS:
+                self._push_operand(instr.arg1, ir_program)
+                self._emit("neg")
+                if instr.result:
+                    self._emit_store_result(instr.result)
+
+            case IROpcode.NOT:
+                self._push_operand(instr.arg1, ir_program)
+                self._emit("not")
+                if instr.result:
+                    self._emit_store_result(instr.result)
+
+            case IROpcode.LOAD_ARRAY:
+                self._emit_array_access(IROpcode.LOAD_ARRAY, instr, ir_program)
+
+            case IROpcode.STORE_ARRAY:
+                self._emit_array_access(IROpcode.STORE_ARRAY, instr, ir_program)
+
+            case IROpcode.READ:
+                self._emit_read(instr.result, ir_program)
+
+            case IROpcode.WRITE:
+                self._emit_write(instr.arg1, ir_program)
+
+            case IROpcode.LABEL:
+                self._emit(f"{instr.label}:")
+
+            case IROpcode.GOTO:
+                self._emit(f"jump {instr.label}")
+
+            case IROpcode.IF_FALSE | IROpcode.IF_FALSE_GOTO:
+                self._push_operand(instr.arg1, ir_program)
+                self._emit(f"jz {instr.label}")
+
+            case IROpcode.IF_GOTO:
+                self._push_operand(instr.arg1, ir_program)
+                self._emit("not")
+                self._emit(f"jz {instr.label}")
+
+            case IROpcode.PARAM:
+                self._push_operand(instr.arg1, ir_program)
+
+            case IROpcode.CALL:
+                self._emit_call(instr)
+
+            case IROpcode.RETURN:
+                self._emit_return(instr, ir_program)
+
+            case IROpcode.ENTER_SCOPE:
+                if instr.label == "main":
+                    self._emit_comment("enter main scope")
+                else:
+                    self._emit_comment(f"enter scope {instr.label or ''}".rstrip())
+
+            case IROpcode.LEAVE_SCOPE:
+                self._emit_comment(f"leave scope {instr.label or ''}".rstrip())
+
+            case _:
+                self._emit(f"; unsupported opcode {instr.opcode.name}")
+
