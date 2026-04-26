@@ -187,7 +187,7 @@ class TestIRGenerator(unittest.TestCase):
         opcodes = [instr.opcode for instr in self.codegen.ir_program.instructions]
         self.assertEqual(
             opcodes,
-            [IROpcode.ASSIGN, IROpcode.LABEL, IROpcode.GT, IROpcode.IF_FALSE, IROpcode.WRITE, IROpcode.LABEL, IROpcode.ADD, IROpcode.GOTO, IROpcode.LABEL],
+            [IROpcode.ASSIGN, IROpcode.LABEL, IROpcode.GT, IROpcode.IF_GOTO, IROpcode.WRITE, IROpcode.LABEL, IROpcode.ADD, IROpcode.GOTO, IROpcode.LABEL],
         )
 
     def test_visit_do_loop_pushes_continue_target(self):

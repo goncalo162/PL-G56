@@ -150,7 +150,8 @@ class CodeGenerator(ASTVisitor):
         end_val = node.end.accept(self)
         cond_reg = self.new_temp()
         self.ir_program.emit_binop(IROpcode.GT, cond_reg, node.variable.name, end_val)
-        self.ir_program.emit_if_false(cond_reg, end_label)
+        # Se i > fim, saímos do ciclo.
+        self.ir_program.emit_if_goto(cond_reg, end_label)
         
         # `CONTINUE` deve saltar para o ponto onde o passo é executado.
         self.loop_stack.append(continue_label)
