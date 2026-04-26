@@ -1,4 +1,4 @@
-.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs test-% test-%-verbose test-%-summary test-%-quick
+.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs compile test-% test-%-verbose test-%-summary test-%-quick
 
 help:
 	@echo "Targets disponíveis:"
@@ -14,6 +14,7 @@ help:
 	@echo "  make venv             - Cria ambiente virtual"
 	@echo "  make lint             - Verifica código com linter"
 	@echo "  make docs             - Gera documentação HTML em docs/html"
+	@echo "  make compile <ficheiro.f> - Compila um ficheiro Fortran (ex: make compile tests/examples/exemplo1_hello.f)"
 	@echo "  make clean            - Remove ficheiros de cache"
 	@echo "  make clean-all        - Limpeza completa"
 
@@ -60,6 +61,12 @@ docs:
 	@mkdir -p docs/html
 	@python3 -m pdoc -o docs/html src
 	@echo "Documentação gerada em docs/html/"
+
+compile:
+	./venv/bin/python -m src.main "$(word 2,$(MAKECMDGOALS))"
+
+%:
+	@:
 
 clean:
 	rm -rf **/__pycache__ **/*.pyc **/.pytest_cache **/.egg-info tests/lextab.py tests/parser.out
