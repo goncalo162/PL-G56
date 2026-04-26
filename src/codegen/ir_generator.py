@@ -41,9 +41,9 @@ class CodeGenerator(ASTVisitor):
         return f"_t{self.temp_counter}"
     
     def new_label(self, prefix="L"):
-        """Cria um novo label textual para saltos e blocos de controlo."""
+        """Cria um novo label string único para a EWVM."""
         self.label_counter += 1
-        return f"_{prefix}{self.label_counter}"
+        return f"{prefix}{self.label_counter}"
 
     def visit_program(self, node: nodes.Program):
         # O bloco principal é tratado como um escopo próprio.
@@ -116,8 +116,8 @@ class CodeGenerator(ASTVisitor):
         return node.value
 
     def visit_if_statement(self, node: nodes.IfStatement):
-        else_label = self.new_label("IF_ELSE")
-        end_label = self.new_label("IF_END")
+        else_label = self.new_label("IFELSE")
+        end_label = self.new_label("IFEND")
 
         # Se a condição for falsa, saltamos diretamente para o ELSE.
         cond_reg = node.condition.accept(self)
@@ -135,40 +135,39 @@ class CodeGenerator(ASTVisitor):
         # Marca o ponto de saída comum do IF.
         self.ir_program.emit_label(end_label)
 
+
     def visit_do_loop(self, node: nodes.DoLoop):
-        start_label = self.new_label("DO_START")
-        continue_label = self.new_label("DO_CONT")
-        end_label = self.new_label("DO_END")
+        start_label = self.new_label("DOSTART")
+        continue_label = self.new_label("DOCONT")
+        end_label = self.new_label("DOEND")
 
         # Inicialização do contador do ciclo.
         start_val = node.start.accept(self)
         self.ir_program.emit_assign(node.variable.name, start_val)
-        
+
         self.ir_program.emit_label(start_label)
-        
         # A condição é avaliada no início de cada iteração.
+        # Condição: se variável > fim, sair
         end_val = node.end.accept(self)
         cond_reg = self.new_temp()
         self.ir_program.emit_binop(IROpcode.GT, cond_reg, node.variable.name, end_val)
-        # Se i > fim, saímos do ciclo.
-        self.ir_program.emit_if_goto(cond_reg, end_label)
-        
         # `CONTINUE` deve saltar para o ponto onde o passo é executado.
+        self.ir_program.emit_if_goto(cond_reg, end_label) 
         self.loop_stack.append(continue_label)
-
-        # Corpo do ciclo.
+         # Corpo do ciclo.
         for stmt in node.body:
             stmt.accept(self)
-            
         self.loop_stack.pop()
 
         # O passo do ciclo fica num ponto separado para suportar `CONTINUE`.
+        # Passo (label para CONTINUE)
         self.ir_program.emit_label(continue_label)
-
         # Incremento.
         step_val = node.step.accept(self) if node.step else 1
-        self.ir_program.emit_binop(IROpcode.ADD, node.variable.name, node.variable.name, step_val)
-        
+        step_temp = self.new_temp()
+        self.ir_program.emit_binop(IROpcode.ADD, step_temp, node.variable.name, step_val)
+        self.ir_program.emit_assign(node.variable.name, step_temp)
+
         self.ir_program.emit_goto(start_label)
         self.ir_program.emit_label(end_label)
 
