@@ -7,6 +7,7 @@ geração de código → otimização.
 """
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from src.lexer.lexer import Lexer
@@ -113,6 +114,13 @@ def main():
         
         if output:
             print(output)
+
+            results_dir = Path("results")
+            results_dir.mkdir(parents=True, exist_ok=True)
+
+            output_file = results_dir / f"{Path(filename).stem}.vm"
+            output_file.write_text(output, encoding="utf-8")
+            print(f"Resultado VM guardado em: {output_file}")
             sys.exit(0)
         else:
             sys.exit(1)
