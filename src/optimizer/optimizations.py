@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.codegen.ir import IRInstruction, IROpcode
 
+#TODO: rever isto tudo 
+
 
 def _to_number(value: Any) -> Optional[float | int]:
     """Converte literais numéricos para tipos Python.

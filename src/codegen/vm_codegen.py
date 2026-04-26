@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from src.codegen.ir import IRInstruction, IRProgram, IROpcode
 
+#TODO: REVER E VER SE DÁ PARA SIMPLIFICAR ISTO
 
 class VMCodeGenerator:
     """Traduz um programa TAC para instruções da EWVM.
