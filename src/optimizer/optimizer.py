@@ -5,21 +5,44 @@ Otimizador de Representação Intermediária
 Implementa passes de otimização sobre a IR.
 """
 
-from src.codegen.ir import IRProgram, IRInstruction, IROpcode
+from __future__ import annotations
+
+from typing import Callable, List, Tuple
+
+from src.codegen.ir import IRInstruction, IRProgram
+from src.optimizer.optimizations import (
+    CommonSubexpressionElimination,
+    ConstantFolding,
+    ConstantPropagation,
+    DeadCodeElimination,
+    LoopUnrolling,
+)
 
 
 class IROptimizer:
     """
     Otimizador de IR.
     
-    Implementa passes de otimização:
-    - Eliminação de código morto
-    - Propagação de constantes
-    - Simplificação de expressões
+    Implementa uma pipeline simples de passes:
+    - Constant Folding
+    - Constant Propagation
+    - Common Subexpression Elimination
+    - Dead Code Elimination
+    - Loop Unrolling (placeholder seguro)
     """
     
     def __init__(self):
+        # Guarda os nomes dos passes que de facto alteraram o programa.
         self.optimizations_applied = []
+
+        # A pipeline é explícita e fácil de reordenar/estender.
+        self._pipeline: List[Tuple[str, Callable[[list], list]]] = [
+            ("constant_folding", ConstantFolding.apply),
+            ("constant_propagation", ConstantPropagation.apply),
+            ("common_subexpression_elimination", CommonSubexpressionElimination.apply),
+            ("dead_code_elimination", DeadCodeElimination.apply),
+            ("loop_unrolling", LoopUnrolling.apply),
+        ]
     
     def optimize(self, ir_program: IRProgram) -> IRProgram:
         """
@@ -31,74 +54,44 @@ class IROptimizer:
         Returns:
             IRProgram otimizado
         """
-        # Pass 1: Eliminação de código morto
-        ir_program = self._eliminate_dead_code(ir_program)
-        self.optimizations_applied.append("dead_code_elimination")
-        
-        # Pass 2: Propagação de constantes (simplificado)
-        ir_program = self._constant_propagation(ir_program)
-        self.optimizations_applied.append("constant_propagation")
-        
+        # Limpamos o histórico para cada nova execução do otimizador.
+        self.optimizations_applied = []
+
+        # Trabalhamos sobre uma cópia da lista para evitar efeitos intermédios
+        # durante a iteração dos passes.
+        instructions = list(ir_program.instructions)
+        for pass_name, pass_fn in self._pipeline:
+            # Guardamos um snapshot estrutural antes do pass.
+            before = self._instruction_signature(instructions)
+
+            # Aplicamos o pass corrente.
+            instructions = pass_fn(instructions)
+
+            # Guardamos snapshot depois do pass para perceber se houve alteração.
+            after = self._instruction_signature(instructions)
+
+            # Só registamos passes que efetivamente mudaram o programa.
+            if before != after:
+                self.optimizations_applied.append(pass_name)
+
+        # No fim, substituímos a lista de instruções do programa original.
+        ir_program.instructions = instructions
         return ir_program
-    
-    def _eliminate_dead_code(self, ir_program: IRProgram) -> IRProgram:
-        """
-        Remove instruções com resultados não utilizados.
-        
-        Simplificação: Remove instruções cujo resultado não é usado.
-        """
-        # Marcar instruções usadas
-        used = set()
-        
-        for instr in ir_program.instructions:
-            if instr.arg1:
-                used.add(instr.arg1)
-            if instr.arg2:
-                used.add(instr.arg2)
-        
-        # Manter instruções com efeito colateral ou usadas
-        filtered = []
-        for instr in ir_program.instructions:
-            # Sempre manter instruções de controle e I/O
-            if instr.opcode in [IROpcode.LABEL, IROpcode.GOTO, IROpcode.COND_GOTO,
-                               IROpcode.READ, IROpcode.WRITE, IROpcode.CALL,
-                               IROpcode.RETURN]:
-                filtered.append(instr)
-            # Manter se resultado é usado
-            elif instr.result in used or instr.result is None:
-                filtered.append(instr)
-        
-        ir_program.instructions = filtered
-        return ir_program
-    
-    def _constant_propagation(self, ir_program: IRProgram) -> IRProgram:
-        """
-        Substitui variáveis por constantes quando possível.
-        
-        Simplificação: Detecta atribuições de constantes e substitui.
-        """
-        constants = {}
-        
-        # Primeira passagem: encontrar constantes
-        for instr in ir_program.instructions:
-            if instr.opcode == IROpcode.ASSIGN:
-                try:
-                    # Se arg1 é constante
-                    val = int(instr.arg1) if isinstance(instr.arg1, (int, str)) else None
-                    if val is not None:
-                        constants[instr.result] = val
-                except (ValueError, TypeError):
-                    pass
-        
-        # Segunda passagem: substituição
-        for instr in ir_program.instructions:
-            if instr.arg1 in constants:
-                instr.arg1 = constants[instr.arg1]
-            if instr.arg2 in constants:
-                instr.arg2 = constants[instr.arg2]
-        
-        return ir_program
+
+    @staticmethod
+    def _instruction_signature(instructions: List[IRInstruction]) -> List[Tuple]:
+        """Cria uma assinatura simples das instruções para comparação de mudanças."""
+        return [
+            (instr.opcode, instr.result, instr.arg1, instr.arg2, instr.label)
+            for instr in instructions
+        ]
     
     def get_report(self) -> str:
         """Retorna relatório de otimizações aplicadas."""
-        return f"Otimizações: {', '.join(self.optimizations_applied)}"
+        total = len(self.optimizations_applied)
+        if total == 0:
+            return "Otimizações aplicadas: 0 (nenhuma alteração)"
+        return (
+            f"Otimizações aplicadas: {total} "
+            f"({', '.join(self.optimizations_applied)})"
+        )
