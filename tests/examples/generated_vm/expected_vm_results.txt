@@ -1,0 +1,9 @@
+# Resultados esperados para validacao manual na EWVM
+
+exemplo1_hello.f
+input: <sem input>
+expected_output: Ola, Mundo!
+
+exemplo2_fatorial.f
+input: 5
+expected_output: Introduza um numero inteiro positivo:Fatorial de 5: 120
