@@ -484,6 +484,7 @@ class Parser:
                       | INT LPAREN expression RPAREN
                       | REAL LPAREN expression RPAREN
                       | NINT LPAREN expression RPAREN'''
+         # TODO: rever isto das built-in
         # Chamada de função como expressão, incluindo funções built-in
         if p.slice[1].type == 'MOD':
             p[0] = FunctionCall(function_name=p[1], arguments=[p[3], p[5]])
