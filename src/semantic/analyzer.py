@@ -78,6 +78,12 @@ class SemanticAnalyzer(ASTVisitor):
     def _add_error(self, message: str):
         """Adiciona erro à lista."""
         self.errors.append(message)
+
+    def _register_statement_label(self, stmt: object):
+        """Regista labels de statements para validação de GOTO."""
+        label = getattr(stmt, 'statement_label', None)
+        if label is not None:
+            self.labels_defined[label] = "statement"
     
     def _get_type(self, node: object) -> Optional[str]:
         """Retorna tipo anotado de um nó."""
@@ -104,6 +110,7 @@ class SemanticAnalyzer(ASTVisitor):
         
         if node.statements:
             for stmt in node.statements:
+                self._register_statement_label(stmt)
                 stmt.accept(self)
         
         if node.subprograms:
@@ -291,10 +298,12 @@ class SemanticAnalyzer(ASTVisitor):
         
         if node.then_body:
             for stmt in node.then_body:
+                self._register_statement_label(stmt)
                 stmt.accept(self)
         
         if hasattr(node, 'else_body') and node.else_body:
             for stmt in node.else_body:
+                self._register_statement_label(stmt)
                 stmt.accept(self)
     
     def visit_do_loop(self, node):
@@ -316,6 +325,7 @@ class SemanticAnalyzer(ASTVisitor):
         
         if node.body:
             for stmt in node.body:
+                self._register_statement_label(stmt)
                 stmt.accept(self)
         
         if hasattr(node, 'label') and node.label:
@@ -378,6 +388,7 @@ class SemanticAnalyzer(ASTVisitor):
         
         if node.body:
             for stmt in node.body:
+                self._register_statement_label(stmt)
                 stmt.accept(self)
         
         self.symbol_table.pop_scope()

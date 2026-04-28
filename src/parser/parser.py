@@ -207,12 +207,9 @@ class Parser:
     def p_statement(self, p):
         '''statement : label_opt simple_statement
                      | label_opt control_statement'''
-        # Delega os statements concretos numa estrutura da AST correspondente.
-        # Por enquanto não guardamos a label no objeto da AST, exceto DoLoop / Goto.
-        if p[1] is not None and isinstance(p[2], ContinueStatement):
-            # Continue guardariamos a label para resolução de ciclos? 
-            # O DO loop consume statements até encontrar NUMBER CONTINUE
-            pass
+        # Preserva labels opcionais em qualquer statement para suportar GOTO.
+        if p[1] is not None and p[2] is not None:
+            setattr(p[2], 'statement_label', p[1])
         p[0] = p[2]
 
     def p_label_opt(self, p):
@@ -488,18 +485,14 @@ class Parser:
                       | REAL LPAREN expression RPAREN
                       | NINT LPAREN expression RPAREN'''
         # Chamada de função como expressão, incluindo funções built-in
-        if len(p) == 5:
-            if p[1] in ('MOD', 'MAX', 'MIN', 'ABS', 'SQRT', 'SIN', 'COS', 'EXP', 'LOG', 'INT', 'REAL', 'NINT'):
-                # Built-in function
-                if p[1] == 'MOD':
-                    p[0] = FunctionCall(function_name=p[1], arguments=[p[3], p[5]])
-                else:
-                    p[0] = FunctionCall(function_name=p[1], arguments=[p[3]] if p[1] != 'MAX' and p[1] != 'MIN' else p[3])
-            else:
-                # User-defined function
-                p[0] = FunctionCall(function_name=p[1], arguments=p[3])
+        if p.slice[1].type == 'MOD':
+            p[0] = FunctionCall(function_name=p[1], arguments=[p[3], p[5]])
+        elif p.slice[1].type in ('MAX', 'MIN'):
+            p[0] = FunctionCall(function_name=p[1], arguments=p[3])
+        elif p.slice[1].type in ('ABS', 'SQRT', 'SIN', 'COS', 'EXP', 'LOG', 'INT', 'REAL', 'NINT'):
+            p[0] = FunctionCall(function_name=p[1], arguments=[p[3]])
         else:
-            # MAX or MIN with expr_list
+            # User-defined function
             p[0] = FunctionCall(function_name=p[1], arguments=p[3])
         
     def p_expression_literal(self, p):

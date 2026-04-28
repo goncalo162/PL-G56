@@ -232,6 +232,25 @@ class TestIRGenerator(unittest.TestCase):
         self.assertEqual(opcodes, [IROpcode.PARAM, IROpcode.PARAM, IROpcode.CALL])
         self.assertEqual(self.codegen.ir_program.instructions[-1].result, "_t1")
 
+    def test_visit_function_call_mod_emits_mod_binop(self):
+        node = nodes.FunctionCall(
+            function_name="MOD",
+            arguments=[
+                nodes.Identifier(name="NUM"),
+                nodes.Identifier(name="I"),
+            ],
+        )
+
+        result = self.codegen.visit_function_call(node)
+
+        self.assertEqual(result, "_t1")
+        self.assertEqual(len(self.codegen.ir_program.instructions), 1)
+        instr = self.codegen.ir_program.instructions[0]
+        self.assertEqual(instr.opcode, IROpcode.MOD)
+        self.assertEqual(instr.arg1, "NUM")
+        self.assertEqual(instr.arg2, "I")
+        self.assertEqual(instr.result, "_t1")
+
     def test_visit_call_statement_emits_call_without_result(self):
         node = nodes.CallStatement(
             subroutine="SUBR",

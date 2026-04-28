@@ -637,6 +637,9 @@ class TestSemanticExamples(unittest.TestCase):
             print(f"\nErros em exemplo3_primo.f:")
             for error in analyzer.get_errors():
                 print(f"  - {error}")
+
+        self.assertTrue(success,
+                       f"Análise semântica falhou: {analyzer.get_errors()}")
     
     def test_exemplo4_soma_lista(self):
         """Analisa ejemplo4_soma_lista.f - arrays e loops."""

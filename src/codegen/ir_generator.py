@@ -45,13 +45,20 @@ class CodeGenerator(ASTVisitor):
         self.label_counter += 1
         return f"{prefix}{self.label_counter}"
 
+    def _emit_statement_with_optional_label(self, stmt):
+        """Emite label explícito para statements rotulados antes do conteúdo."""
+        label = getattr(stmt, 'statement_label', None)
+        if label is not None:
+            self.ir_program.emit_label(label)
+        stmt.accept(self)
+
     def visit_program(self, node: nodes.Program):
         # O bloco principal é tratado como um escopo próprio.
         self.ir_program.emit_enter_scope("main")
         for decl in node.declarations:
             decl.accept(self)
         for stmt in node.statements:
-            stmt.accept(self)
+            self._emit_statement_with_optional_label(stmt)
         for subprogram in node.subprograms:
             subprogram.accept(self)
         self.ir_program.emit_leave_scope("main")
@@ -123,14 +130,14 @@ class CodeGenerator(ASTVisitor):
         cond_reg = node.condition.accept(self)
         self.ir_program.emit_if_false(cond_reg, else_label)
         for stmt in node.then_body:
-            stmt.accept(self)
+            self._emit_statement_with_optional_label(stmt)
         self.ir_program.emit_goto(end_label)
 
         # O bloco ELSE é opcional.
         self.ir_program.emit_label(else_label)
         if node.else_body:
             for stmt in node.else_body:
-                stmt.accept(self)
+                self._emit_statement_with_optional_label(stmt)
         
         # Marca o ponto de saída comum do IF.
         self.ir_program.emit_label(end_label)
@@ -156,7 +163,7 @@ class CodeGenerator(ASTVisitor):
         self.loop_stack.append(continue_label)
          # Corpo do ciclo.
         for stmt in node.body:
-            stmt.accept(self)
+            self._emit_statement_with_optional_label(stmt)
         self.loop_stack.pop()
 
         # O passo do ciclo fica num ponto separado para suportar `CONTINUE`.
@@ -186,7 +193,7 @@ class CodeGenerator(ASTVisitor):
         self.ir_program.emit_enter_scope(node.name)
         # Os parâmetros são resolvidos no CALL; aqui emitimos apenas o corpo.
         for stmt in node.body:
-            stmt.accept(self)
+            self._emit_statement_with_optional_label(stmt)
         self.ir_program.emit_leave_scope(node.name)
         # O RETURN é gerado por nós próprios no corpo da função.
 
@@ -200,22 +207,34 @@ class CodeGenerator(ASTVisitor):
         self.ir_program.emit_return(val)
 
     def visit_function_call(self, node: nodes.FunctionCall):
+        # O parser pode representar argumentos como lista ou nó único.
+        args = node.arguments if isinstance(node.arguments, list) else [node.arguments]
+
+        if node.function_name == "MOD" and len(args) == 2:
+            left = args[0].accept(self)
+            right = args[1].accept(self)
+            temp_reg = self.new_temp()
+            self.ir_program.emit_binop(IROpcode.MOD, temp_reg, left, right)
+            return temp_reg
+
         # Os argumentos são empilhados na ordem inversa para preservar a ordem.
-        for arg in reversed(node.arguments):
+        for arg in reversed(args):
             arg_val = arg.accept(self)
             self.ir_program.emit_param(arg_val)
         
         temp_reg = self.new_temp()
-        self.ir_program.emit_call(node.function_name, len(node.arguments), temp_reg)
+        self.ir_program.emit_call(node.function_name, len(args), temp_reg)
         return temp_reg
 
     def visit_call_statement(self, node: nodes.CallStatement):
+        # O parser pode representar argumentos como lista ou nó único.
+        args = node.arguments if isinstance(node.arguments, list) else [node.arguments]
         # Chamada de subrotina: os efeitos laterais interessam, não o retorno.
-        for arg in reversed(node.arguments):
+        for arg in reversed(args):
             arg_val = arg.accept(self)
             self.ir_program.emit_param(arg_val)
 
-        self.ir_program.emit_call(node.subroutine, len(node.arguments))
+        self.ir_program.emit_call(node.subroutine, len(args))
 
     def visit_array_access(self, node: nodes.ArrayAccess):
         # A versão actual ainda trata acessos unidimensionais.
