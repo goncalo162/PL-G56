@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.codegen.ir import IRInstruction, IROpcode
 
-#TODO: rever isto tudo 
+#TODO: rever isto tudo, está tudo mal, o codigo gerado sem otimizaçoes funciona mas com não funciona
 
 
 def _to_number(value: Any) -> Optional[float | int]:
@@ -188,7 +188,6 @@ class ConstantPropagation:
 
     @staticmethod
     def apply(instructions):
-        """Substitui usos de variáveis por literais quando possível."""
         constants: Dict[str, Any] = {}
         out: List[IRInstruction] = []
 
@@ -198,7 +197,11 @@ class ConstantPropagation:
             return value
 
         for instr in instructions:
-            # Criamos uma cópia leve para não mutar a lista original in-place.
+            # LABEL = possível alvo de salto para trás (loop).
+            # Qualquer constante propagada pode estar desatualizada a partir daqui.
+            if instr.opcode == IROpcode.LABEL:
+                constants.clear()  # <- ESTA É A CORREÇÃO
+
             updated = IRInstruction(
                 opcode=instr.opcode,
                 result=instr.result,
@@ -222,7 +225,6 @@ class ConstantPropagation:
             out.append(updated)
 
         return out
-
 
 class LoopUnrolling:
     """Desdobra loops pequenos para melhorar performance."""
