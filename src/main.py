@@ -30,7 +30,7 @@ class FortranCompiler:
     Orquestra todas as fases da compilação.
     """
     
-    def __init__(self, enable_optimizations=True):
+    def __init__(self, enable_optimizations=False):
         self.lexer = Lexer()
         self.parser = Parser()
         self.semantic_analyzer = SemanticAnalyzer()
@@ -71,6 +71,7 @@ class FortranCompiler:
             # 4. Geração de IR (Intermediate Representation)
             logger.info("Fase 4: Geração de Código Intermédio (IR)")
             ir_program = self.ir_generator.generate_code(ast)
+            print(ir_program.dump())
             logger.info("IR gerado")
             
             # 5. Otimização (Valorização)

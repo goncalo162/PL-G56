@@ -143,34 +143,53 @@ class CodeGenerator(ASTVisitor):
         self.ir_program.emit_label(end_label)
 
 
-    def visit_do_loop(self, node: nodes.DoLoop):
-        start_label = self.new_label("DOSTART")
-        continue_label = self.new_label("DOCONT")
-        end_label = self.new_label("DOEND")
 
-        # Inicialização do contador do ciclo.
+    def visit_do_loop(self, node: nodes.DoLoop):
+        start_label    = self.new_label("DOSTART")
+        continue_label = self.new_label("DOCONT")
+        end_label      = self.new_label("DOEND")
+
+        # Inicialização: variavel = start
         start_val = node.start.accept(self)
         self.ir_program.emit_assign(node.variable.name, start_val)
 
         self.ir_program.emit_label(start_label)
-        # A condição é avaliada no início de cada iteração.
-        # Condição: se variável > fim, sair
-        end_val = node.end.accept(self)
+
+        # NOTA: DEPOIS EXPLICAR BEM ISTO
+
+        # Condição de saída: se variavel > fim, sair
+        # emit_if_false(cond, label) -> jz label (salta se cond == 0, ou seja falso)
+        # Queremos: se (variavel > fim) então sair
+        # Logo: emit_if_goto(cond_gt, end_label) estaria errado porque IF_GOTO faz NOT+jz
+        # Usamos emit_if_false com a condição INVERTIDA: (variavel <= fim)
+        # Mais simples: calcular (variavel > fim) e usar emit_if_goto directo sem NOT
+
+        end_val  = node.end.accept(self)
         cond_reg = self.new_temp()
+        # cond_reg = (variavel > fim)
         self.ir_program.emit_binop(IROpcode.GT, cond_reg, node.variable.name, end_val)
-        # `CONTINUE` deve saltar para o ponto onde o passo é executado.
-        self.ir_program.emit_if_goto(cond_reg, end_label) 
+        # IF_FALSE emite: push cond_reg + jz end_label
+        # ou seja: se cond_reg == 0 (falso, variavel <= fim) NÃO sai -- ERRADO
+        # Queremos sair quando cond_reg == 1, logo usamos IF_FALSE com NOT implícito?
+        # NÃO — usamos emit_if_false na condição LE (<=) para CONTINUAR
+
+        # A forma mais clara: condição de PERMANÊNCIA é (variavel <= fim)
+        # se permanencia == falso -> sair
+        perm_reg = self.new_temp()
+        self.ir_program.emit_binop(IROpcode.LE, perm_reg, node.variable.name, end_val)
+        self.ir_program.emit_if_false(perm_reg, end_label)  # jz end_label se variavel > fim
+
+        # Corpo
         self.loop_stack.append(continue_label)
-         # Corpo do ciclo.
         for stmt in node.body:
             self._emit_statement_with_optional_label(stmt)
         self.loop_stack.pop()
 
-        # O passo do ciclo fica num ponto separado para suportar `CONTINUE`.
-        # Passo (label para CONTINUE)
+        # Label do passo (para CONTINUE)
         self.ir_program.emit_label(continue_label)
-        # Incremento.
-        step_val = node.step.accept(self) if node.step else 1
+
+        # Incremento
+        step_val  = node.step.accept(self) if node.step else 1
         step_temp = self.new_temp()
         self.ir_program.emit_binop(IROpcode.ADD, step_temp, node.variable.name, step_val)
         self.ir_program.emit_assign(node.variable.name, step_temp)
