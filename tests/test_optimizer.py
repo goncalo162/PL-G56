@@ -78,6 +78,28 @@ class TestOptimizationPasses(unittest.TestCase):
         self.assertEqual(len(optimized), 2)
         self.assertEqual(optimized[0].opcode, IROpcode.CALL)
 
+    def test_dead_code_elimination_removes_unreferenced_label(self):
+        instructions = [
+            IRInstruction(IROpcode.LABEL, label="L1"),
+            IRInstruction(IROpcode.ASSIGN, result="x", arg1=1),
+            IRInstruction(IROpcode.WRITE, arg1="x"),
+            IRInstruction(IROpcode.LABEL, label="L2"),
+        ]
+
+        optimized = DeadCodeElimination.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.ASSIGN, IROpcode.WRITE])
+
+    def test_dead_code_elimination_keeps_referenced_label(self):
+        instructions = [
+            IRInstruction(IROpcode.LABEL, label="L1"),
+            IRInstruction(IROpcode.GOTO, label="L1"),
+        ]
+
+        optimized = DeadCodeElimination.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.LABEL, IROpcode.GOTO])
+
     def test_common_subexpression_elimination_reuses_previous_result(self):
         instructions = [
             IRInstruction(IROpcode.ADD, result="t1", arg1="a", arg2="b"),

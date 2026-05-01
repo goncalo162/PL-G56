@@ -44,6 +44,8 @@ def _instruction_uses(instr: IRInstruction) -> List[Any]:
     if instr.opcode == IROpcode.STORE_ARRAY:
         # array[index] = value  -> usa array, index e value (guardado em result)
         return [instr.arg1, instr.arg2, instr.result]
+    if instr.opcode == IROpcode.CALL:
+        return [instr.arg1]
     if instr.opcode in {IROpcode.IF_FALSE, IROpcode.IF_FALSE_GOTO, IROpcode.IF_GOTO,
                         IROpcode.WRITE, IROpcode.PARAM, IROpcode.RETURN,
                         IROpcode.UMINUS, IROpcode.NOT, IROpcode.ASSIGN}:
@@ -63,8 +65,19 @@ class DeadCodeElimination:
         A análise percorre as instruções de trás para a frente. Instruções sem
         efeito colateral cujo resultado não é usado são removidas.
         """
+        referenced_labels = {
+            instr.label
+            for instr in instructions
+            if instr.opcode in {IROpcode.GOTO, IROpcode.IF_FALSE, IROpcode.IF_GOTO, IROpcode.IF_FALSE_GOTO}
+            and instr.label is not None
+        }
+        referenced_labels.update(
+            instr.arg1
+            for instr in instructions
+            if instr.opcode == IROpcode.CALL and instr.arg1 is not None
+        )
+
         side_effecting = {
-            IROpcode.LABEL,
             IROpcode.GOTO,
             IROpcode.IF_FALSE,
             IROpcode.IF_GOTO,
@@ -85,6 +98,11 @@ class DeadCodeElimination:
         for instr in reversed(instructions):
             uses = [u for u in _instruction_uses(instr) if isinstance(u, str)]
             defines = instr.result if isinstance(instr.result, str) else None
+
+            if instr.opcode == IROpcode.LABEL:
+                if instr.label in referenced_labels:
+                    kept_reversed.append(instr)
+                continue
 
             must_keep = (
                 instr.opcode in side_effecting

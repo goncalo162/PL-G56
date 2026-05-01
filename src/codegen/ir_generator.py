@@ -52,21 +52,6 @@ class CodeGenerator(ASTVisitor):
             self.ir_program.emit_label(label)
         stmt.accept(self)
 
-    def _body_uses_continue(self, statements):
-        """Detecta se um corpo de ciclo contém CONTINUE no próprio nível."""
-        for stmt in statements or []:
-            if isinstance(stmt, nodes.ContinueStatement):
-                return True
-            if isinstance(stmt, nodes.IfStatement):
-                if self._body_uses_continue(stmt.then_body):
-                    return True
-                if stmt.else_body and self._body_uses_continue(stmt.else_body):
-                    return True
-                for _cond, body in getattr(stmt, 'elif_parts', []):
-                    if self._body_uses_continue(body):
-                        return True
-        return False
-
     def visit_program(self, node: nodes.Program):
         # O bloco principal é tratado como um escopo próprio.
         self.ir_program.emit_enter_scope("main")
@@ -161,8 +146,8 @@ class CodeGenerator(ASTVisitor):
 
     def visit_do_loop(self, node: nodes.DoLoop):
         start_label    = self.new_label("DOSTART")
+        continue_label = self.new_label("DOCONT")
         end_label      = self.new_label("DOEND")
-        continue_label = self.new_label("DOCONT") if self._body_uses_continue(node.body) else None
 
         # Inicialização: variavel = start
         start_val = node.start.accept(self)
@@ -175,16 +160,13 @@ class CodeGenerator(ASTVisitor):
         self.ir_program.emit_if_false(perm_reg, end_label)  # jz end_label se variavel > fim
 
         # Corpo
-        if continue_label is not None:
-            self.loop_stack.append(continue_label)
+        self.loop_stack.append(continue_label)
         for stmt in node.body:
             self._emit_statement_with_optional_label(stmt)
-        if continue_label is not None:
-            self.loop_stack.pop()
+        self.loop_stack.pop()
 
-        # Label do passo (só é necessário quando existe CONTINUE no corpo)
-        if continue_label is not None:
-            self.ir_program.emit_label(continue_label)
+        # Label do passo para `CONTINUE`; o DCE remove-a quando não for usada.
+        self.ir_program.emit_label(continue_label)
 
         # Incremento
         step_val  = node.step.accept(self) if node.step else 1
