@@ -229,7 +229,11 @@ class TestVMCodeGenerator(unittest.TestCase):
 
         output = self._generate(ir_program)
 
-        self.assertIn("padd", output)
+        self.assertIn("pushgp", output)
+        self.assertIn("pushi 0", output)
+        self.assertIn("pushi 1", output)
+        self.assertIn("sub", output)
+        self.assertGreaterEqual(output.count("padd"), 4)
         self.assertIn("load 0", output)
         self.assertIn("store 0", output)
 

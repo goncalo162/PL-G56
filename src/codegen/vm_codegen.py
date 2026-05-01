@@ -54,18 +54,29 @@ class VMCodeGenerator:
         if not dimensions:
             return 1
 
+        def _dimension_bound(value: Any) -> Optional[int]:
+            if isinstance(value, int) and not isinstance(value, bool):
+                return value
+            if hasattr(value, "value") and isinstance(getattr(value, "value"), int):
+                return getattr(value, "value")
+            return None
+
         sizes: List[int] = []
         for dimension in dimensions:
             if isinstance(dimension, tuple) and len(dimension) == 2:
                 start, end = dimension
-                if isinstance(start, int) and isinstance(end, int):
-                    sizes.append(max(1, end - start + 1))
+                start_value = _dimension_bound(start)
+                end_value = _dimension_bound(end)
+                if start_value is not None and end_value is not None:
+                    sizes.append(max(1, end_value - start_value + 1))
                 else:
                     sizes.append(1)
-            elif isinstance(dimension, int):
-                sizes.append(max(1, dimension))
             else:
-                sizes.append(1)
+                bound = _dimension_bound(dimension)
+                if bound is not None:
+                    sizes.append(max(1, bound))
+                else:
+                    sizes.append(1)
 
         return max(1, prod(sizes))
 
@@ -106,6 +117,24 @@ class VMCodeGenerator:
             if isinstance(info, dict):
                 return info.get("type")
         return None
+
+    def _array_lower_bound(self, array_name: str, ir_program: IRProgram) -> int:
+        info = ir_program.variables.get(array_name)
+        if not isinstance(info, dict):
+            return 1
+
+        dims = info.get("dims")
+        if not dims:
+            return 1
+
+        first_dim = dims[0]
+        if isinstance(first_dim, tuple) and len(first_dim) == 2:
+            start, _end = first_dim
+            if isinstance(start, int):
+                return start
+            if hasattr(start, "value") and isinstance(getattr(start, "value"), int):
+                return getattr(start, "value")
+        return 1
 
     def _push_operand(self, operand: Any, ir_program: IRProgram):
         """Empilha um operando literal ou o valor de uma variável."""
@@ -237,8 +266,15 @@ class VMCodeGenerator:
         if instr.arg1 not in self.symbol_map:
             raise KeyError(f"Array desconhecido: {instr.arg1}")
 
-        self._emit(f"pushg {self.symbol_map[instr.arg1]}")
+        # O array vive num bloco global contíguo; começamos na morada base.
+        self._emit("pushgp")
+        self._emit(f"pushi {self.symbol_map[instr.arg1]}")
+        self._emit("padd")
         self._push_operand(instr.arg2, ir_program)
+        lower_bound = self._array_lower_bound(instr.arg1, ir_program)
+        if lower_bound != 0:
+            self._emit(f"pushi {lower_bound}")
+            self._emit("sub")
         self._emit("padd")
 
         if opcode == IROpcode.LOAD_ARRAY:
@@ -246,7 +282,6 @@ class VMCodeGenerator:
             if instr.result:
                 self._store_result(instr.result)
             return
-
 
         self._push_operand(instr.result, ir_program)
         self._emit("store 0")

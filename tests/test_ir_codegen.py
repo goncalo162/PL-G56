@@ -187,7 +187,7 @@ class TestIRGenerator(unittest.TestCase):
         opcodes = [instr.opcode for instr in self.codegen.ir_program.instructions]
         self.assertEqual(
             opcodes,
-            [IROpcode.ASSIGN, IROpcode.LABEL, IROpcode.GT, IROpcode.IF_GOTO, IROpcode.WRITE, IROpcode.LABEL, IROpcode.ADD, IROpcode.GOTO, IROpcode.LABEL],
+            [IROpcode.ASSIGN, IROpcode.LABEL, IROpcode.LE, IROpcode.IF_FALSE, IROpcode.WRITE, IROpcode.ADD, IROpcode.ASSIGN, IROpcode.GOTO, IROpcode.LABEL],
         )
 
     def test_visit_do_loop_pushes_continue_target(self):
@@ -201,7 +201,7 @@ class TestIRGenerator(unittest.TestCase):
         self.codegen.visit_do_loop(node)
 
         gotos = [instr for instr in self.codegen.ir_program.instructions if instr.opcode == IROpcode.GOTO]
-        self.assertTrue(any(instr.label == "_DO_CONT2" for instr in gotos))
+        self.assertTrue(any(instr.label == "DOCONT2" for instr in gotos))
 
     def test_visit_continue_statement_outside_loop_raises(self):
         with self.assertRaises(ValueError):
@@ -215,6 +215,18 @@ class TestIRGenerator(unittest.TestCase):
         instr = self.codegen.ir_program.instructions[0]
         self.assertEqual(instr.opcode, IROpcode.GOTO)
         self.assertEqual(instr.label, "_DO_CONT1")
+
+    def test_visit_read_statement_emits_array_store_for_array_access(self):
+        self.codegen.ir_program.variables = {"ARR": {"type": "INTEGER", "dims": [(1, 5)]}, "I": {"type": "INTEGER"}}
+        node = nodes.ReadStatement(
+            unit=nodes.Literal(value='*', type_name='CHARACTER'),
+            variables=[nodes.ArrayAccess(name="ARR", indices=[nodes.Identifier(name="I")])],
+        )
+
+        self.codegen.visit_read_statement(node)
+
+        opcodes = [instr.opcode for instr in self.codegen.ir_program.instructions]
+        self.assertEqual(opcodes, [IROpcode.READ, IROpcode.STORE_ARRAY])
 
     def test_visit_function_call_returns_temp_and_emits_call(self):
         node = nodes.FunctionCall(

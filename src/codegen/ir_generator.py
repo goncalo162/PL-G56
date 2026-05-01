@@ -52,6 +52,21 @@ class CodeGenerator(ASTVisitor):
             self.ir_program.emit_label(label)
         stmt.accept(self)
 
+    def _body_uses_continue(self, statements):
+        """Detecta se um corpo de ciclo contém CONTINUE no próprio nível."""
+        for stmt in statements or []:
+            if isinstance(stmt, nodes.ContinueStatement):
+                return True
+            if isinstance(stmt, nodes.IfStatement):
+                if self._body_uses_continue(stmt.then_body):
+                    return True
+                if stmt.else_body and self._body_uses_continue(stmt.else_body):
+                    return True
+                for _cond, body in getattr(stmt, 'elif_parts', []):
+                    if self._body_uses_continue(body):
+                        return True
+        return False
+
     def visit_program(self, node: nodes.Program):
         # O bloco principal é tratado como um escopo próprio.
         self.ir_program.emit_enter_scope("main")
@@ -146,47 +161,30 @@ class CodeGenerator(ASTVisitor):
 
     def visit_do_loop(self, node: nodes.DoLoop):
         start_label    = self.new_label("DOSTART")
-        continue_label = self.new_label("DOCONT")
         end_label      = self.new_label("DOEND")
+        continue_label = self.new_label("DOCONT") if self._body_uses_continue(node.body) else None
 
         # Inicialização: variavel = start
         start_val = node.start.accept(self)
         self.ir_program.emit_assign(node.variable.name, start_val)
 
         self.ir_program.emit_label(start_label)
-
-        # NOTA: DEPOIS EXPLICAR BEM ISTO
-
-        # Condição de saída: se variavel > fim, sair
-        # emit_if_false(cond, label) -> jz label (salta se cond == 0, ou seja falso)
-        # Queremos: se (variavel > fim) então sair
-        # Logo: emit_if_goto(cond_gt, end_label) estaria errado porque IF_GOTO faz NOT+jz
-        # Usamos emit_if_false com a condição INVERTIDA: (variavel <= fim)
-        # Mais simples: calcular (variavel > fim) e usar emit_if_goto directo sem NOT
-
         end_val  = node.end.accept(self)
-        cond_reg = self.new_temp()
-        # cond_reg = (variavel > fim)
-        self.ir_program.emit_binop(IROpcode.GT, cond_reg, node.variable.name, end_val)
-        # IF_FALSE emite: push cond_reg + jz end_label
-        # ou seja: se cond_reg == 0 (falso, variavel <= fim) NÃO sai -- ERRADO
-        # Queremos sair quando cond_reg == 1, logo usamos IF_FALSE com NOT implícito?
-        # NÃO — usamos emit_if_false na condição LE (<=) para CONTINUAR
-
-        # A forma mais clara: condição de PERMANÊNCIA é (variavel <= fim)
-        # se permanencia == falso -> sair
         perm_reg = self.new_temp()
         self.ir_program.emit_binop(IROpcode.LE, perm_reg, node.variable.name, end_val)
         self.ir_program.emit_if_false(perm_reg, end_label)  # jz end_label se variavel > fim
 
         # Corpo
-        self.loop_stack.append(continue_label)
+        if continue_label is not None:
+            self.loop_stack.append(continue_label)
         for stmt in node.body:
             self._emit_statement_with_optional_label(stmt)
-        self.loop_stack.pop()
+        if continue_label is not None:
+            self.loop_stack.pop()
 
-        # Label do passo (para CONTINUE)
-        self.ir_program.emit_label(continue_label)
+        # Label do passo (só é necessário quando existe CONTINUE no corpo)
+        if continue_label is not None:
+            self.ir_program.emit_label(continue_label)
 
         # Incremento
         step_val  = node.step.accept(self) if node.step else 1
@@ -204,7 +202,18 @@ class CodeGenerator(ASTVisitor):
 
     def visit_read_statement(self, node: nodes.ReadStatement):
         for var in node.variables:
-            self.ir_program.emit_read(var.name)
+            if isinstance(var, nodes.ArrayAccess):
+                # READ numa posição de array precisa ler para um temporário
+                # e depois armazenar no elemento correspondente.
+                temp_reg = self.new_temp()
+                element_type = self.ir_program.variables.get(var.name, {}).get("type", "UNKNOWN")
+                self.ir_program.variables[temp_reg] = {"type": element_type}
+
+                self.ir_program.emit_read(temp_reg)
+                index_reg = var.indices[0].accept(self)
+                self.ir_program.emit_array_store(var.name, index_reg, temp_reg)
+            else:
+                self.ir_program.emit_read(var.name)
 
     def visit_function_declaration(self, node: nodes.FunctionDeclaration):
         # Funções e subrotinas partilham a mesma estrutura de geração no TAC.
