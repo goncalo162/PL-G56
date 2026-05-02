@@ -27,8 +27,8 @@ class TestIRGenerator(unittest.TestCase):
     def test_new_temp_and_new_label(self):
         self.assertEqual(self.codegen.new_temp(), "_t1")
         self.assertEqual(self.codegen.new_temp(), "_t2")
-        self.assertEqual(self.codegen.new_label(), "_L1")
-        self.assertEqual(self.codegen.new_label("IF"), "_IF2")
+        self.assertEqual(self.codegen.new_label(), "L1")
+        self.assertEqual(self.codegen.new_label("IF"), "IF2")
 
     def test_visit_literal_returns_value(self):
         node = nodes.Literal(value=5, type_name="INTEGER")

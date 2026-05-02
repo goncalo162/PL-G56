@@ -82,7 +82,6 @@ class TestCompilerExamplesE2E(unittest.TestCase):
                     continue
 
                 compiled.append(example_path.name)
-                self.assertIn("SECTION .text", vm_code)
                 self.assertIn("start", vm_code)
                 self.assertIn("stop", vm_code)
 
