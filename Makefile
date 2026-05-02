@@ -1,6 +1,6 @@
-FORTRAN_ARGS := $(filter %.f,$(MAKECMDGOALS))
+FORTRAN_ARGS := $(filter %.f %.f90,$(MAKECMDGOALS))
 
-.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs compile compile-opt test-% test-%-verbose test-%-summary test-%-quick
+.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs compile compile-opt compile-free compile-free-opt test-% test-%-verbose test-%-summary test-%-quick
 .PHONY: $(FORTRAN_ARGS)
 
 help:
@@ -19,6 +19,8 @@ help:
 	@echo "  make docs             - Gera documentação HTML em docs/html"
 	@echo "  make compile <ficheiro.f> - Compila um ficheiro Fortran (ex: make compile tests/examples/exemplo1_hello.f)"
 	@echo "  make compile-opt <ficheiro.f> - Compila com otimizações de IR ativadas"
+	@echo "  make compile-free <ficheiro.f90> - Compila um ficheiro Fortran em free form"
+	@echo "  make compile-free-opt <ficheiro.f90> - Compila free form com otimizações"
 	@echo "  make clean            - Remove ficheiros de cache"
 	@echo "  make clean-all        - Limpeza completa"
 
@@ -70,6 +72,12 @@ compile:
 
 compile-opt:
 	./venv/bin/python -m src.main --optimize "$(word 2,$(MAKECMDGOALS))"
+
+compile-free:
+	./venv/bin/python -m src.main --format free "$(word 2,$(MAKECMDGOALS))"
+
+compile-free-opt:
+	./venv/bin/python -m src.main --format free --optimize "$(word 2,$(MAKECMDGOALS))"
 
 $(FORTRAN_ARGS):
 	@:

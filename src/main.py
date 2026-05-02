@@ -29,7 +29,7 @@ class FortranCompiler:
     Orquestra todas as fases da compilação.
     """
 
-    def __init__(self, enable_optimizations=False):
+    def __init__(self, enable_optimizations=False, source_format="fixed"):
         self.lexer = Lexer()
         self.parser = Parser()
         self.semantic_analyzer = SemanticAnalyzer()
@@ -37,6 +37,7 @@ class FortranCompiler:
         self.optimizer = IROptimizer()
         self.vm_codegen = VMCodeGenerator()
         self.enable_optimizations = enable_optimizations
+        self.source_format = source_format
 
     def compile(self, source_code: str) -> Optional[str]:
         """
@@ -50,9 +51,9 @@ class FortranCompiler:
         """
         try:
             logger.info("Iniciando compilação...")
-
+            
             logger.info("Fase 1: Análise Léxica")
-            tokens = self.lexer.tokenize(source_code)
+            tokens = self.lexer.tokenize(source_code, format_type=self.source_format)
             logger.info("Tokens gerados!")
 
             logger.info("Fase 2: Análise Sintática")
@@ -105,6 +106,12 @@ def main():
         action="store_true",
         help="ativa otimizações sobre a IR antes de gerar código VM"
     )
+    parser.add_argument(
+        "--format",
+        choices=("fixed", "free"),
+        default="fixed",
+        help="formato do código fonte Fortran"
+    )
     args = parser.parse_args()
 
     filename = args.filename
@@ -113,7 +120,10 @@ def main():
         with open(filename, 'r') as f:
             source_code = f.read()
 
-        compiler = FortranCompiler(enable_optimizations=args.optimize)
+        compiler = FortranCompiler(
+            enable_optimizations=args.optimize,
+            source_format=args.format,
+        )
         output = compiler.compile(source_code)
 
         if output:
