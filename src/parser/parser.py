@@ -85,7 +85,66 @@ class Parser:
     def p_program(self, p):
         '''program : PROGRAM IDENTIFIER declarations statements END subprograms_opt'''
         # Nó raiz da árvore. O programa principal seguido de opcional subprogramas.
-        p[0] = Program(name=p[2], declarations=p[3], statements=p[4], subprograms=p[6] or [])
+        program = Program(name=p[2], declarations=p[3], statements=p[4], subprograms=p[6] or [])
+        self._normalize_function_references(program)
+        p[0] = program
+
+    def _normalize_function_references(self, program):
+        """Resolve a ambiguidade Fortran entre chamada de função e acesso a array.
+
+        Em Fortran, `F(X)` pode ser uma chamada de função ou um acesso a array.
+        Como os subprogramas só são conhecidos depois do `END` do programa
+        principal, fazemos uma passagem curta sobre a AST completa e convertemos
+        usos em expressão para FunctionCall quando o nome coincide com uma
+        função/subrotina definida no ficheiro.
+        """
+        function_names = {sub.name for sub in program.subprograms if getattr(sub, 'name', None)}
+        if not function_names:
+            return
+
+        def rewrite_expr(expr):
+            if isinstance(expr, ArrayAccess) and expr.name in function_names:
+                return FunctionCall(function_name=expr.name, arguments=[rewrite_expr(arg) for arg in expr.indices])
+            if isinstance(expr, BinaryOp):
+                expr.left = rewrite_expr(expr.left)
+                expr.right = rewrite_expr(expr.right)
+            elif isinstance(expr, UnaryOp):
+                expr.operand = rewrite_expr(expr.operand)
+            elif isinstance(expr, FunctionCall):
+                expr.arguments = [rewrite_expr(arg) for arg in (expr.arguments or [])]
+            return expr
+
+        def rewrite_stmt(stmt):
+            if isinstance(stmt, Assignment):
+                stmt.value = rewrite_expr(stmt.value)
+            elif isinstance(stmt, IfStatement):
+                stmt.condition = rewrite_expr(stmt.condition)
+                for inner in stmt.then_body or []:
+                    rewrite_stmt(inner)
+                for _cond, body in stmt.elif_parts or []:
+                    for inner in body or []:
+                        rewrite_stmt(inner)
+                for inner in stmt.else_body or []:
+                    rewrite_stmt(inner)
+            elif isinstance(stmt, DoLoop):
+                stmt.start = rewrite_expr(stmt.start)
+                stmt.end = rewrite_expr(stmt.end)
+                if stmt.step:
+                    stmt.step = rewrite_expr(stmt.step)
+                for inner in stmt.body or []:
+                    rewrite_stmt(inner)
+            elif isinstance(stmt, PrintStatement):
+                stmt.expressions = [rewrite_expr(expr) for expr in stmt.expressions]
+            elif isinstance(stmt, CallStatement):
+                stmt.arguments = [rewrite_expr(arg) for arg in stmt.arguments]
+            elif isinstance(stmt, ReadStatement):
+                return
+
+        for stmt in program.statements:
+            rewrite_stmt(stmt)
+        for subprogram in program.subprograms:
+            for stmt in subprogram.body or []:
+                rewrite_stmt(stmt)
     
     def p_subprograms_opt(self, p):
         '''subprograms_opt : subprograms

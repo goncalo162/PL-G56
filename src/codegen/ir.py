@@ -154,6 +154,7 @@ class IRProgram:
     name: str
     instructions: List[IRInstruction] = field(default_factory=list)
     variables: Dict[str, dict] = field(default_factory=dict)
+    function_params: Dict[str, List[str]] = field(default_factory=dict)
     _temp_count: int = field(default=0, init=False, repr=False, compare=False)
     _label_count: int = field(default=0, init=False, repr=False, compare=False)
 

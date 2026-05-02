@@ -25,6 +25,7 @@ class VMCodeGenerator:
     """
 
     def __init__(self):
+        self._function_end_label = "ENDFUNCTIONS"
         self._reset()
 
     def _reset(self):
@@ -32,10 +33,13 @@ class VMCodeGenerator:
         self.vm_code: List[str] = []
         self.symbol_map: Dict[str, int] = {}
         self.next_address: int = 0
+        self._function_names: set[str] = set()
+        self._emitted_function_jump = False
 
     def generate_vm_code(self, ir_program: IRProgram) -> str:
         """Gera assembly EWVM a partir de um programa TAC."""
         self._reset()
+        self._function_names = set(getattr(ir_program, "function_params", {}))
         self._allocate_static_data(ir_program)
 
          # O arranque é feito por START
@@ -43,6 +47,9 @@ class VMCodeGenerator:
 
         for instr in ir_program.instructions:
             self._translate_instruction(instr, ir_program)
+
+        if self._emitted_function_jump:
+            self.vm_code.append(f"{self._function_end_label}:")
 
         if not any(line.strip() == "stop" for line in self.vm_code):
             self.vm_code.append("stop")
@@ -290,7 +297,10 @@ class VMCodeGenerator:
         """Emite chamada de procedimento/função."""
         self._emit(f"pusha {instr.arg1}")
         self._emit("call")
+        if instr.arg2:
+            self._emit(f"pop {instr.arg2}")
         if instr.result:
+            self._push_operand(instr.arg1, None)
             self._store_result(instr.result)
 
     def _emit_return(self, instr: IRInstruction, ir_program: IRProgram):
@@ -344,6 +354,12 @@ class VMCodeGenerator:
                 self._emit_write(instr.arg1, ir_program)
 
             case IROpcode.LABEL:
+                if (
+                    instr.label in self._function_names
+                    and not self._emitted_function_jump
+                ):
+                    self._emit(f"jump {self._function_end_label}")
+                    self._emitted_function_jump = True
                 self._emit(f"{instr.label}:")
 
             case IROpcode.GOTO:
@@ -368,6 +384,11 @@ class VMCodeGenerator:
                 self._emit_return(instr, ir_program)
 
             case IROpcode.ENTER_SCOPE:
+                params = getattr(ir_program, "function_params", {}).get(instr.label, [])
+                for offset, param in enumerate(params, start=1):
+                    self._emit("pushfp")
+                    self._emit(f"load -{offset}")
+                    self._store_result(param)
                 self._emit_comment(f"enter scope {instr.arg1 or ''}".rstrip())
 
             case IROpcode.LEAVE_SCOPE:

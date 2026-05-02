@@ -20,6 +20,7 @@ Padrão de Implementação:
 
 from typing import Optional, Dict, List
 from src.exceptions import SemanticError
+from src.ast.nodes import VariableDeclaration
 from src.ast.visitor import ASTVisitor
 from src.semantic.symbol_table import SymbolTable
 from src.semantic.type_checker import TypeChecker
@@ -100,13 +101,18 @@ class SemanticAnalyzer(ASTVisitor):
     def visit_program(self, node):
         """Processa o nó raiz do programa.
         
-        A ordem importa: primeiro declarações, depois statements, e por fim
-        subprogramas. Isso garante que símbolos globais estejam definidos
-        antes de serem usados nas instruções abaixo.
+        A ordem importa: primeiro declarações globais, depois assinaturas de
+        subprogramas, depois statements, e por fim os corpos dos subprogramas.
+        Isto permite chamadas a funções definidas após o END do programa
+        principal, como é comum em Fortran 77.
         """
         if node.declarations:
             for decl in node.declarations:
                 decl.accept(self)
+
+        if node.subprograms:
+            for subprog in node.subprograms:
+                self._declare_function_symbol(subprog)
         
         if node.statements:
             for stmt in node.statements:
@@ -118,6 +124,37 @@ class SemanticAnalyzer(ASTVisitor):
                 subprog.accept(self)
         
         self._validate_goto_labels()
+
+    def _declare_function_symbol(self, node):
+        """Regista a assinatura de uma função sem visitar ainda o corpo."""
+        existing = self.symbol_table.lookup_in_current(node.name)
+        parameters = [p.name for p in (node.parameters or [])]
+
+        if existing is None:
+            try:
+                self.symbol_table.declare(
+                    node.name,
+                    node.return_type,
+                    is_function=True,
+                    return_type=node.return_type,
+                    parameters=parameters
+                )
+            except SemanticError as e:
+                self._add_error(str(e))
+            return
+
+        # Fortran 77 permite declarar o tipo da função no programa principal,
+        # por exemplo `INTEGER CONVRT`, antes de definir `INTEGER FUNCTION CONVRT`.
+        if not existing.is_function and not existing.dimensions and existing.type_name == node.return_type:
+            existing.is_function = True
+            existing.return_type = node.return_type
+            existing.parameters = parameters
+            return
+
+        if existing.is_function:
+            return
+
+        self._add_error(f"Símbolo '{node.name}' já declarado neste escopo")
     
     # ====================================================================
     # Declarações
@@ -233,13 +270,42 @@ class SemanticAnalyzer(ASTVisitor):
     
     def visit_function_call(self, node):
         """Valida chamada de função e os seus argumentos."""
-        if node.arguments:
-            # O AST pode representar argumentos como lista ou como único valor.
-            args = node.arguments if isinstance(node.arguments, list) else [node.arguments]
-            for arg in args:
-                arg.accept(self)
-                arg_type = self._get_type(arg)
-                self._set_type(node, arg_type or "UNKNOWN")
+        args = node.arguments if isinstance(node.arguments, list) else [node.arguments]
+
+        arg_types = []
+        for arg in args:
+            arg.accept(self)
+            arg_types.append(self._get_type(arg) or "UNKNOWN")
+
+        builtin_returns = {
+            "MOD": arg_types[0] if arg_types else "UNKNOWN",
+            "ABS": arg_types[0] if arg_types else "UNKNOWN",
+            "SQRT": "REAL",
+            "SIN": "REAL",
+            "COS": "REAL",
+            "EXP": "REAL",
+            "LOG": "REAL",
+            "INT": "INTEGER",
+            "REAL": "REAL",
+            "NINT": "INTEGER",
+        }
+        function_name = node.function_name.upper()
+        if function_name in builtin_returns:
+            self._set_type(node, builtin_returns[function_name])
+            return
+
+        symbol = self.symbol_table.lookup(node.function_name)
+        if symbol is None:
+            self._add_error(f"Função '{node.function_name}' não declarada")
+            self._set_type(node, "UNKNOWN")
+            return
+
+        if not symbol.is_function:
+            self._add_error(f"'{node.function_name}' não é uma função")
+            self._set_type(node, "UNKNOWN")
+            return
+
+        self._set_type(node, symbol.return_type or symbol.type_name)
     
     def visit_array_access(self, node):
         """Valida acesso a um array e suas dimensões."""
@@ -367,27 +433,34 @@ class SemanticAnalyzer(ASTVisitor):
     
     def visit_function_declaration(self, node):
         """Valida declaração de função e abre novo scope de parâmetros."""
-        try:
-            self.symbol_table.declare(
-                node.name,
-                node.return_type,
-                is_function=True,
-                return_type=node.return_type,
-                parameters=[p.name for p in (node.parameters or [])]
-            )
-        except SemanticError as e:
-            self._add_error(str(e))
-            return
+        if self.symbol_table.lookup_in_current(node.name) is None:
+            self._declare_function_symbol(node)
         
         # Função tem scope próprio para parâmetros e variáveis locais.
         self.symbol_table.push_scope()
         
+        param_names = {param.name for param in (node.parameters or [])}
+        local_param_types = {
+            stmt.name: stmt.type_name
+            for stmt in (node.body or [])
+            if isinstance(stmt, VariableDeclaration) and stmt.name in param_names
+        }
+
         if node.parameters:
             for param in node.parameters:
-                param.accept(self)
+                try:
+                    self.symbol_table.declare(
+                        param.name,
+                        local_param_types.get(param.name, param.type_name),
+                        is_parameter=True
+                    )
+                except SemanticError as e:
+                    self._add_error(str(e))
         
         if node.body:
             for stmt in node.body:
+                if isinstance(stmt, VariableDeclaration) and stmt.name in param_names:
+                    continue
                 self._register_statement_label(stmt)
                 stmt.accept(self)
         
