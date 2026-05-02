@@ -256,7 +256,11 @@ class TestVMCodeGenerator(unittest.TestCase):
 
     def test_array_load_and_store_translate_using_padd_and_load_store(self):
         ir_program = IRProgram(name="ARRAYOPS")
-        ir_program.variables = {"ARR": {"type": "INTEGER", "dims": [(1, 4)]}, "I": {"type": "INTEGER"}, "X": {"type": "INTEGER"}}
+        ir_program.variables = {
+            "ARR": {"type": "INTEGER", "dims": [(1, 4)]},
+            "I": {"type": "INTEGER"},
+            "X": {"type": "INTEGER"},
+        }
         ir_program.emit_array_load("X", "ARR", "I")
         ir_program.emit_array_store("ARR", "I", "X")
 
