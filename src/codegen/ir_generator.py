@@ -199,6 +199,11 @@ class CodeGenerator(ASTVisitor):
 
     def visit_function_declaration(self, node: nodes.FunctionDeclaration):
         # Funções e subrotinas partilham a mesma estrutura de geração no TAC.
+        self.ir_program.function_params[node.name] = [param.name for param in (node.parameters or [])]
+        self.ir_program.variables.setdefault(node.name, {'type': node.return_type, 'dims': None})
+        for param in node.parameters or []:
+            self.ir_program.variables.setdefault(param.name, {'type': param.type_name, 'dims': param.dimensions})
+
         self.ir_program.emit_label(node.name)
         self.ir_program.emit_enter_scope(node.name)
         # Os parâmetros são resolvidos no CALL; aqui emitimos apenas o corpo.
@@ -261,4 +266,3 @@ class CodeGenerator(ASTVisitor):
         if not self.loop_stack:
             raise ValueError("CONTINUE fora de um ciclo DO")
         self.ir_program.emit_goto(self.loop_stack[-1])
-
