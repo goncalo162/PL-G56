@@ -27,7 +27,6 @@ test-all:
 	@echo "Executando suite completa de testes..."
 	python3 -m pytest tests/ -v --tb=short
 
-# Targets dinâmicos para ficheiros de teste individuais
 test-verbose-%:
 	python3 -m pytest tests/test_$*.py -vv --tb=long -s
 

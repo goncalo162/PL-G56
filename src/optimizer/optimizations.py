@@ -11,8 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.codegen.ir import IRInstruction, IROpcode
 
-#TODO: rever isto tudo, está tudo mal, o codigo gerado sem otimizaçoes funciona mas com não funciona
-
 
 def _to_number(value: Any) -> Optional[float | int]:
     """Converte literais numéricos para tipos Python.
@@ -42,7 +40,6 @@ def _to_number(value: Any) -> Optional[float | int]:
 def _instruction_uses(instr: IRInstruction) -> List[Any]:
     """Extrai operandos usados por uma instrução (para análise de liveness)."""
     if instr.opcode == IROpcode.STORE_ARRAY:
-        # array[index] = value  -> usa array, index e value (guardado em result)
         return [instr.arg1, instr.arg2, instr.result]
     if instr.opcode == IROpcode.CALL:
         return [instr.arg1]
@@ -60,18 +57,9 @@ def _is_temp_name(name: Any) -> bool:
     return isinstance(name, str) and name.startswith("_t") and name[2:].isdigit()
 
 
-def _is_jump(instr: IRInstruction) -> bool:
-    return instr.opcode in {
-        IROpcode.GOTO,
-        IROpcode.IF_FALSE,
-        IROpcode.IF_FALSE_GOTO,
-        IROpcode.IF_GOTO,
-    }
-
-
 class DeadCodeElimination:
     """Remove código que nunca é executado ou cujo resultado é descartado."""
-    
+
     @staticmethod
     def apply(instructions):
         """Aplica eliminação de código morto por análise de liveness.
@@ -136,7 +124,7 @@ class DeadCodeElimination:
 
 class ConstantFolding:
     """Avalia expressões com constantes em tempo de compilação."""
-    
+
     @staticmethod
     def apply(instructions):
         """Aplica constant folding em operações puramente literais."""
@@ -148,7 +136,7 @@ class ConstantFolding:
             IROpcode.AND, IROpcode.OR,
         }
         unary_ops = {IROpcode.UMINUS, IROpcode.NOT}
-        
+
         for instr in instructions:
             if instr.result is None:
                 new_instructions.append(instr)
@@ -189,7 +177,7 @@ class ConstantFolding:
                             folded = int(left != right)
                         elif instr.opcode == IROpcode.AND:
                             folded = int(bool(left) and bool(right))
-                        else:  # IROpcode.OR
+                        else:
                             folded = int(bool(left) or bool(right))
 
                         new_instructions.append(
@@ -212,7 +200,7 @@ class ConstantFolding:
                     continue
 
             new_instructions.append(instr)
-        
+
         return new_instructions
 
 
@@ -287,10 +275,8 @@ class ConstantPropagation:
             return value
 
         for instr in instructions:
-            # LABEL = possível alvo de salto para trás (loop).
-            # Qualquer constante propagada pode estar desatualizada a partir daqui.
             if instr.opcode == IROpcode.LABEL:
-                constants.clear()  # <- ESTA É A CORREÇÃO
+                constants.clear()
 
             updated = IRInstruction(
                 opcode=instr.opcode,
@@ -316,9 +302,10 @@ class ConstantPropagation:
 
         return out
 
+
 class LoopUnrolling:
     """Desdobra loops pequenos para melhorar performance."""
-    
+
     @staticmethod
     def apply(instructions):
         """Aplica loop unrolling (placeholder seguro).
@@ -331,7 +318,7 @@ class LoopUnrolling:
 
 class CommonSubexpressionElimination:
     """Remove computações de sub-expressões comuns."""
-    
+
     @staticmethod
     def apply(instructions):
         """Aplica CSE local e conservadora.
@@ -388,7 +375,6 @@ class CommonSubexpressionElimination:
                 IROpcode.READ,
                 IROpcode.STORE_ARRAY,
             }:
-                # Conservadoramente, fronteiras de controlo limpam o estado de CSE.
                 expr_to_result.clear()
 
             out.append(instr)
@@ -448,7 +434,11 @@ class ControlFlowSimplification:
             if instr.opcode in {IROpcode.IF_FALSE, IROpcode.IF_FALSE_GOTO, IROpcode.IF_GOTO}:
                 value = _to_number(instr.arg1)
                 if value is not None:
-                    should_jump = value == 0 if instr.opcode in {IROpcode.IF_FALSE, IROpcode.IF_FALSE_GOTO} else value != 0
+                    should_jump = (
+                        value == 0
+                        if instr.opcode in {IROpcode.IF_FALSE, IROpcode.IF_FALSE_GOTO}
+                        else value != 0
+                    )
                     if should_jump:
                         out.append(IRInstruction(IROpcode.GOTO, label=instr.label))
                     continue

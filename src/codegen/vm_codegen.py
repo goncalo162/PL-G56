@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional
 
 from src.codegen.ir import IRInstruction, IRProgram, IROpcode
 
-#TODO: REVER E VER SE DÁ PARA SIMPLIFICAR ISTO
 
 class VMCodeGenerator:
     """Traduz um programa TAC para instruções da EWVM.
@@ -42,7 +41,6 @@ class VMCodeGenerator:
         self._function_names = set(getattr(ir_program, "function_params", {}))
         self._allocate_static_data(ir_program)
 
-         # O arranque é feito por START
         self.vm_code.append("start")
 
         for instr in ir_program.instructions:
@@ -231,11 +229,6 @@ class VMCodeGenerator:
 
         self._emit(mnemonic)
 
-    def _emit_store_result(self, name: str):
-        if name not in self.symbol_map:
-            self._allocate_symbol(name)
-        self._emit(f"storeg {self.symbol_map[name]}")
-
     def _emit_write(self, operand: Any, ir_program: IRProgram):
         """Emite WRITEI/WRITEF/WRITES conforme o tipo do operando."""
         operand_type = self._operand_symbol_type(operand, ir_program)
@@ -273,7 +266,6 @@ class VMCodeGenerator:
         if instr.arg1 not in self.symbol_map:
             raise KeyError(f"Array desconhecido: {instr.arg1}")
 
-        # O array vive num bloco global contíguo; começamos na morada base.
         self._emit("pushgp")
         self._emit(f"pushi {self.symbol_map[instr.arg1]}")
         self._emit("padd")
@@ -317,29 +309,29 @@ class VMCodeGenerator:
         """Traduz uma única instrução TAC para EWVM."""
         match instr.opcode:
             case (IROpcode.ADD | IROpcode.SUB | IROpcode.MUL | IROpcode.DIV |
-                  IROpcode.MOD | IROpcode.POW | IROpcode.EQ  | IROpcode.NE  |
-                  IROpcode.LT  | IROpcode.LE  | IROpcode.GT  | IROpcode.GE  |
+                  IROpcode.MOD | IROpcode.POW | IROpcode.EQ | IROpcode.NE |
+                  IROpcode.LT | IROpcode.LE | IROpcode.GT | IROpcode.GE |
                   IROpcode.AND | IROpcode.OR):
                 self._emit_binary_opcode(instr.opcode, ir_program, instr.arg1, instr.arg2)
                 if instr.result:
-                    self._emit_store_result(instr.result)
+                    self._store_result(instr.result)
 
             case IROpcode.ASSIGN:
                 self._push_operand(instr.arg1, ir_program)
                 if instr.result:
-                    self._emit_store_result(instr.result)
+                    self._store_result(instr.result)
 
             case IROpcode.UMINUS:
                 self._push_operand(instr.arg1, ir_program)
                 self._emit("neg")
                 if instr.result:
-                    self._emit_store_result(instr.result)
+                    self._store_result(instr.result)
 
             case IROpcode.NOT:
                 self._push_operand(instr.arg1, ir_program)
                 self._emit("not")
                 if instr.result:
-                    self._emit_store_result(instr.result)
+                    self._store_result(instr.result)
 
             case IROpcode.LOAD_ARRAY:
                 self._emit_array_access(IROpcode.LOAD_ARRAY, instr, ir_program)
