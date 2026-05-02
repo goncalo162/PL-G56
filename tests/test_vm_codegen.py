@@ -215,6 +215,34 @@ class TestVMCodeGenerator(unittest.TestCase):
         self.assertIn("call", output)
         self.assertIn("storeg 0", output)
 
+    def test_function_call_binds_params_cleans_args_and_reads_function_result(self):
+        ir_program = IRProgram(name="CALLS")
+        ir_program.variables = {
+            "A": {"type": "INTEGER"},
+            "B": {"type": "INTEGER"},
+            "F": {"type": "INTEGER"},
+            "P": {"type": "INTEGER"},
+            "Q": {"type": "INTEGER"},
+            "X": {"type": "INTEGER"},
+        }
+        ir_program.function_params = {"F": ["P", "Q"]}
+        ir_program.emit_param("B")
+        ir_program.emit_param("A")
+        ir_program.emit_call("F", 2, "X")
+        ir_program.emit_label("F")
+        ir_program.emit_enter_scope("F")
+        ir_program.emit_return()
+        ir_program.emit_leave_scope("F")
+
+        output = self._generate(ir_program)
+
+        self.assertIn("pop 2", output)
+        self.assertIn("pushfp\nload -1\nstoreg", output)
+        self.assertIn("pushfp\nload -2\nstoreg", output)
+        self.assertIn("pushg 2\nstoreg 5", output)
+        self.assertIn("jump ENDFUNCTIONS", output)
+        self.assertIn("ENDFUNCTIONS:", output)
+
     def test_return_with_and_without_value(self):
         ir_program = IRProgram(name="RET")
         ir_program.variables = {"X": {"type": "INTEGER"}}

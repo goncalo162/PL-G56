@@ -774,6 +774,21 @@ class TestParserFunctionCalls(unittest.TestCase):
         END"""
         ast = self._parse(code)
         self.assertIsNotNone(ast)
+
+    def test_user_function_defined_after_main_is_function_call(self):
+        """Distingue chamada de função de acesso a array quando a função é definida depois."""
+        code = """PROGRAM TEST
+        INTEGER X, Y, RESULT, F
+        RESULT = F(X, Y)
+        END
+
+        INTEGER FUNCTION F(A, B)
+        INTEGER A, B
+        F = A + B
+        RETURN
+        END"""
+        ast = self._parse(code)
+        self.assertIsInstance(ast.statements[0].value, FunctionCall)
     
     def test_call_statement_no_args(self):
         """Testa CALL de subrotina sem argumentos."""

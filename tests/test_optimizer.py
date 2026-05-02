@@ -4,10 +4,13 @@ import unittest
 
 from src.codegen.ir import IRInstruction, IRProgram, IROpcode
 from src.optimizer.optimizations import (
+    AlgebraicSimplification,
     CommonSubexpressionElimination,
     ConstantFolding,
     ConstantPropagation,
+    ControlFlowSimplification,
     DeadCodeElimination,
+    LocalTempForwarding,
     LoopUnrolling,
 )
 from src.optimizer.optimizer import IROptimizer
@@ -54,9 +57,9 @@ class TestOptimizationPasses(unittest.TestCase):
 
         self.assertEqual(optimized[1].arg1, 5)
 
-    def test_dead_code_elimination_removes_unused_assign(self):
+    def test_dead_code_elimination_keeps_assignments_and_removes_unused_temp(self):
         instructions = [
-            IRInstruction(IROpcode.ASSIGN, result="unused", arg1=10),
+            IRInstruction(IROpcode.ADD, result="_t1", arg1=1, arg2=1),
             IRInstruction(IROpcode.ASSIGN, result="x", arg1=2),
             IRInstruction(IROpcode.WRITE, arg1="x"),
         ]
@@ -99,6 +102,90 @@ class TestOptimizationPasses(unittest.TestCase):
         optimized = DeadCodeElimination.apply(instructions)
 
         self.assertEqual([instr.opcode for instr in optimized], [IROpcode.LABEL, IROpcode.GOTO])
+
+    def test_algebraic_simplification_removes_neutral_operations(self):
+        instructions = [
+            IRInstruction(IROpcode.ADD, result="t1", arg1="x", arg2=0),
+            IRInstruction(IROpcode.MUL, result="t2", arg1=1, arg2="y"),
+            IRInstruction(IROpcode.MUL, result="t3", arg1="z", arg2=0),
+        ]
+
+        optimized = AlgebraicSimplification.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.ASSIGN] * 3)
+        self.assertEqual(optimized[0].arg1, "x")
+        self.assertEqual(optimized[1].arg1, "y")
+        self.assertEqual(optimized[2].arg1, 0)
+
+    def test_control_flow_simplification_removes_goto_to_next_label(self):
+        instructions = [
+            IRInstruction(IROpcode.GOTO, label="L1"),
+            IRInstruction(IROpcode.LABEL, label="L1"),
+            IRInstruction(IROpcode.WRITE, arg1="x"),
+        ]
+
+        optimized = ControlFlowSimplification.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.LABEL, IROpcode.WRITE])
+
+    def test_control_flow_simplification_removes_unreachable_after_goto(self):
+        instructions = [
+            IRInstruction(IROpcode.GOTO, label="L1"),
+            IRInstruction(IROpcode.WRITE, arg1="dead"),
+            IRInstruction(IROpcode.LABEL, label="L1"),
+            IRInstruction(IROpcode.WRITE, arg1="live"),
+        ]
+
+        optimized = ControlFlowSimplification.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.GOTO, IROpcode.LABEL, IROpcode.WRITE])
+        self.assertEqual(optimized[-1].arg1, "live")
+
+    def test_dead_code_elimination_removes_dead_temp_assign(self):
+        instructions = [
+            IRInstruction(IROpcode.ASSIGN, result="_t1", arg1=10),
+            IRInstruction(IROpcode.WRITE, arg1="x"),
+        ]
+
+        optimized = DeadCodeElimination.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.WRITE])
+
+    def test_dead_code_elimination_keeps_non_temp_operation_assignments(self):
+        instructions = [
+            IRInstruction(IROpcode.ADD, result="BASE", arg1="BASE", arg2=1),
+            IRInstruction(IROpcode.GOTO, label="L1"),
+            IRInstruction(IROpcode.LABEL, label="L1"),
+        ]
+
+        optimized = DeadCodeElimination.apply(instructions)
+
+        self.assertEqual(optimized[0].opcode, IROpcode.ADD)
+        self.assertEqual(optimized[0].result, "BASE")
+
+    def test_local_temp_forwarding_merges_temp_assignment_pair(self):
+        instructions = [
+            IRInstruction(IROpcode.ADD, result="_t1", arg1="BASE", arg2=1),
+            IRInstruction(IROpcode.ASSIGN, result="BASE", arg1="_t1"),
+        ]
+
+        optimized = LocalTempForwarding.apply(instructions)
+
+        self.assertEqual(len(optimized), 1)
+        self.assertEqual(optimized[0].opcode, IROpcode.ADD)
+        self.assertEqual(optimized[0].result, "BASE")
+
+    def test_local_temp_forwarding_merges_call_result_pair(self):
+        instructions = [
+            IRInstruction(IROpcode.CALL, result="_t1", arg1="F", arg2=2),
+            IRInstruction(IROpcode.ASSIGN, result="RESULT", arg1="_t1"),
+        ]
+
+        optimized = LocalTempForwarding.apply(instructions)
+
+        self.assertEqual(len(optimized), 1)
+        self.assertEqual(optimized[0].opcode, IROpcode.CALL)
+        self.assertEqual(optimized[0].result, "RESULT")
 
     def test_common_subexpression_elimination_reuses_previous_result(self):
         instructions = [

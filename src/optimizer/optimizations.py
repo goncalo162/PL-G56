@@ -55,6 +55,20 @@ def _instruction_uses(instr: IRInstruction) -> List[Any]:
     return [instr.arg1, instr.arg2]
 
 
+def _is_temp_name(name: Any) -> bool:
+    """Deteta temporários gerados pelo IR (`_t1`, `_t2`, ...)."""
+    return isinstance(name, str) and name.startswith("_t") and name[2:].isdigit()
+
+
+def _is_jump(instr: IRInstruction) -> bool:
+    return instr.opcode in {
+        IROpcode.GOTO,
+        IROpcode.IF_FALSE,
+        IROpcode.IF_FALSE_GOTO,
+        IROpcode.IF_GOTO,
+    }
+
+
 class DeadCodeElimination:
     """Remove código que nunca é executado ou cujo resultado é descartado."""
     
@@ -106,6 +120,7 @@ class DeadCodeElimination:
 
             must_keep = (
                 instr.opcode in side_effecting
+                or (defines is not None and not _is_temp_name(defines))
                 or defines is None
                 or defines in live
             )
@@ -199,6 +214,63 @@ class ConstantFolding:
             new_instructions.append(instr)
         
         return new_instructions
+
+
+class AlgebraicSimplification:
+    """Aplica identidades algébricas locais sem alterar efeitos observáveis."""
+
+    @staticmethod
+    def apply(instructions):
+        out: List[IRInstruction] = []
+
+        for instr in instructions:
+            if instr.result is None:
+                out.append(instr)
+                continue
+
+            left = _to_number(instr.arg1)
+            right = _to_number(instr.arg2)
+
+            replacement = None
+            if instr.opcode == IROpcode.ADD:
+                if right == 0:
+                    replacement = instr.arg1
+                elif left == 0:
+                    replacement = instr.arg2
+            elif instr.opcode == IROpcode.SUB:
+                if right == 0:
+                    replacement = instr.arg1
+            elif instr.opcode == IROpcode.MUL:
+                if right == 1:
+                    replacement = instr.arg1
+                elif left == 1:
+                    replacement = instr.arg2
+                elif right == 0 or left == 0:
+                    replacement = 0
+            elif instr.opcode == IROpcode.DIV:
+                if right == 1:
+                    replacement = instr.arg1
+            elif instr.opcode == IROpcode.AND:
+                if right == 1:
+                    replacement = instr.arg1
+                elif left == 1:
+                    replacement = instr.arg2
+                elif right == 0 or left == 0:
+                    replacement = 0
+            elif instr.opcode == IROpcode.OR:
+                if right == 0:
+                    replacement = instr.arg1
+                elif left == 0:
+                    replacement = instr.arg2
+                elif right == 1 or left == 1:
+                    replacement = 1
+
+            if replacement is not None:
+                out.append(IRInstruction(IROpcode.ASSIGN, result=instr.result, arg1=replacement))
+            else:
+                out.append(instr)
+
+        return out
 
 
 class ConstantPropagation:
@@ -320,5 +392,97 @@ class CommonSubexpressionElimination:
                 expr_to_result.clear()
 
             out.append(instr)
+
+        return out
+
+
+class LocalTempForwarding:
+    """Elimina temporários usados apenas na atribuição imediatamente seguinte."""
+
+    @staticmethod
+    def apply(instructions):
+        out: List[IRInstruction] = []
+        index = 0
+
+        while index < len(instructions):
+            instr = instructions[index]
+            next_instr = instructions[index + 1] if index + 1 < len(instructions) else None
+
+            if (
+                next_instr is not None
+                and _is_temp_name(instr.result)
+                and next_instr.opcode == IROpcode.ASSIGN
+                and next_instr.arg1 == instr.result
+                and isinstance(next_instr.result, str)
+            ):
+                forwarded = IRInstruction(
+                    opcode=instr.opcode,
+                    result=next_instr.result,
+                    arg1=instr.arg1,
+                    arg2=instr.arg2,
+                    label=instr.label,
+                )
+                out.append(forwarded)
+                index += 2
+                continue
+
+            out.append(instr)
+            index += 1
+
+        return out
+
+
+class ControlFlowSimplification:
+    """Simplifica saltos e código inalcançável em sequências lineares de IR."""
+
+    @staticmethod
+    def apply(instructions):
+        simplified = ControlFlowSimplification._simplify_constant_branches(instructions)
+        simplified = ControlFlowSimplification._remove_redundant_gotos(simplified)
+        return ControlFlowSimplification._remove_unreachable_after_jump(simplified)
+
+    @staticmethod
+    def _simplify_constant_branches(instructions):
+        out: List[IRInstruction] = []
+        for instr in instructions:
+            if instr.opcode in {IROpcode.IF_FALSE, IROpcode.IF_FALSE_GOTO, IROpcode.IF_GOTO}:
+                value = _to_number(instr.arg1)
+                if value is not None:
+                    should_jump = value == 0 if instr.opcode in {IROpcode.IF_FALSE, IROpcode.IF_FALSE_GOTO} else value != 0
+                    if should_jump:
+                        out.append(IRInstruction(IROpcode.GOTO, label=instr.label))
+                    continue
+            out.append(instr)
+        return out
+
+    @staticmethod
+    def _remove_redundant_gotos(instructions):
+        out: List[IRInstruction] = []
+        for index, instr in enumerate(instructions):
+            next_instr = instructions[index + 1] if index + 1 < len(instructions) else None
+            if (
+                instr.opcode == IROpcode.GOTO
+                and next_instr is not None
+                and next_instr.opcode == IROpcode.LABEL
+                and instr.label == next_instr.label
+            ):
+                continue
+            out.append(instr)
+        return out
+
+    @staticmethod
+    def _remove_unreachable_after_jump(instructions):
+        out: List[IRInstruction] = []
+        unreachable = False
+
+        for instr in instructions:
+            if unreachable and instr.opcode != IROpcode.LABEL:
+                continue
+
+            unreachable = False
+            out.append(instr)
+
+            if instr.opcode in {IROpcode.GOTO, IROpcode.RETURN}:
+                unreachable = True
 
         return out

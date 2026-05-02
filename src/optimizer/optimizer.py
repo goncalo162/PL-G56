@@ -11,10 +11,13 @@ from typing import Callable, List, Tuple
 
 from src.codegen.ir import IRInstruction, IRProgram
 from src.optimizer.optimizations import (
+    AlgebraicSimplification,
     CommonSubexpressionElimination,
     ConstantFolding,
     ConstantPropagation,
+    ControlFlowSimplification,
     DeadCodeElimination,
+    LocalTempForwarding,
     LoopUnrolling,
 )
 
@@ -26,7 +29,10 @@ class IROptimizer:
     Implementa uma pipeline simples de passes:
     - Constant Folding
     - Constant Propagation
+    - Algebraic Simplification
     - Common Subexpression Elimination
+    - Local Temporary Forwarding
+    - Control Flow Simplification
     - Dead Code Elimination
     - Loop Unrolling (placeholder seguro)
     """
@@ -39,7 +45,11 @@ class IROptimizer:
         self._pipeline: List[Tuple[str, Callable[[list], list]]] = [
             ("constant_folding", ConstantFolding.apply),
             ("constant_propagation", ConstantPropagation.apply),
+            ("algebraic_simplification", AlgebraicSimplification.apply),
+            ("constant_folding_after_algebraic", ConstantFolding.apply),
             ("common_subexpression_elimination", CommonSubexpressionElimination.apply),
+            ("local_temp_forwarding", LocalTempForwarding.apply),
+            ("control_flow_simplification", ControlFlowSimplification.apply),
             ("dead_code_elimination", DeadCodeElimination.apply),
             ("loop_unrolling", LoopUnrolling.apply),
         ]
