@@ -118,7 +118,7 @@ class Lexer:
         # Cria a instância verdadeira do PLY assim que os tokens estiverem definidos
         self.lexer = lex.lex(module=self)
     
-    def tokenize(self, source_code: str, preprocess: bool = True):
+    def tokenize(self, source_code: str, preprocess: bool = True, format_type: str | None = None):
         """
         Atualiza o estado do lexer com o código pré-processado e devolve a 
         instância do lexer do PLY (necessária para ser consumida pelo YACC).
@@ -126,15 +126,14 @@ class Lexer:
         Args:
             source_code: String contendo o código Fortran cru
             preprocess: Se True, aplica o pré-processador (default True)
+            format_type: Formato Fortran a usar no pré-processador ("fixed" ou "free")
         Returns:
             Instância do PLY lexer pronta a gerar tokens.
         """
-        # Se preprocess=True, aplica o pré-processador normalmente
         if preprocess:
-            processed_code = Preprocessor.process(source_code, FORMAT)
+            processed_code = Preprocessor.process(source_code, format_type or FORMAT)
         else:
             processed_code = source_code
-        # Alimenta o lexer com o código (pré-processado ou não)
         self.lexer.input(processed_code)
         return self.lexer
 

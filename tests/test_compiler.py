@@ -138,5 +138,30 @@ class TestCompilerExamplesE2E(unittest.TestCase):
         )
 
 
+class TestCompilerFreeFormExamples(unittest.TestCase):
+    """Testes end-to-end para exemplos em Fortran free form."""
+
+    EXAMPLES_DIR = Path("tests/examples/free")
+
+    def test_compile_all_free_form_examples(self):
+        for example_path in sorted(self.EXAMPLES_DIR.glob("*.f90")):
+            with self.subTest(example=example_path.name):
+                source = example_path.read_text(encoding="utf-8")
+                compiler = FortranCompiler(enable_optimizations=True, source_format="free")
+                vm_code = compiler.compile(source)
+
+                self.assertIsNotNone(vm_code)
+                self.assertIn("start", vm_code)
+                self.assertIn("stop", vm_code)
+
+    def test_free_form_comment_marker_inside_string(self):
+        source = (self.EXAMPLES_DIR / "exemplo1_hello.f90").read_text(encoding="utf-8")
+        compiler = FortranCompiler(source_format="free")
+        vm_code = compiler.compile(source)
+
+        self.assertIsNotNone(vm_code)
+        self.assertIn('pushs "Ola, Mundo!"', vm_code)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,26 @@ class Preprocessor:
             raise ValueError(f"Formato desconhecido no config: {format_type}")
 
     @staticmethod
+    def _strip_free_comment(line: str) -> str:
+        in_string = False
+        index = 0
+
+        while index < len(line):
+            char = line[index]
+
+            if char == "'":
+                if in_string and index + 1 < len(line) and line[index + 1] == "'":
+                    index += 2
+                    continue
+                in_string = not in_string
+            elif char == "!" and not in_string:
+                return line[:index]
+
+            index += 1
+
+        return line
+
+    @staticmethod
     def _process_fixed(source_code: str) -> str:
         """
         Processa Fortran 77 ANSI Standard (Fixed Form).
@@ -140,8 +160,7 @@ class Preprocessor:
                 processed_lines.append("")
                 continue
 
-            # Remover comentários: encontra o primeiro '!' fora de strings, mas de forma simples só procuramos '!'
-            code_part = line.split('!', 1)[0].strip() # divide a linha no primeiro '!' e usa a parte do código (index 0, antes do comentário)
+            code_part = Preprocessor._strip_free_comment(line).strip()
             
             if not code_part:
                 flush_buffer()
@@ -167,4 +186,3 @@ class Preprocessor:
 
         flush_buffer()
         return '\n'.join(processed_lines)
-
