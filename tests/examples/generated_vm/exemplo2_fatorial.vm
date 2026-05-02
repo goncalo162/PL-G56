@@ -1,0 +1,38 @@
+start
+// enter scope
+pushs "Introduza um numero inteiro positivo:"
+writes
+read
+atoi
+storeg 0
+pushi 1
+storeg 2
+pushi 1
+storeg 1
+DOSTART1:
+pushg 1
+pushg 0
+infeq
+storeg 3
+pushg 3
+jz DOEND3
+pushg 2
+pushg 1
+mul
+storeg 2
+pushg 1
+pushi 1
+add
+storeg 1
+jump DOSTART1
+DOEND3:
+pushs "Fatorial de "
+writes
+pushg 0
+writei
+pushs ": "
+writes
+pushg 2
+writei
+// leave scope
+stop

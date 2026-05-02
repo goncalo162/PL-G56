@@ -98,19 +98,29 @@ class FortranCompiler:
 
 def main():
     """Ponto de entrada do compilador."""
+    import argparse
     import sys
     
-    if len(sys.argv) < 2:
-        print("Uso: python -m src.main <arquivo.f>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        prog="python -m src.main",
+        description="Compila um ficheiro Fortran 77 para código EWVM."
+    )
+    parser.add_argument("filename", help="ficheiro .f a compilar")
+    parser.add_argument(
+        "-O",
+        "--optimize",
+        action="store_true",
+        help="ativa otimizações sobre a IR antes de gerar código VM"
+    )
+    args = parser.parse_args()
     
-    filename = sys.argv[1]
+    filename = args.filename
     
     try:
         with open(filename, 'r') as f:
             source_code = f.read()
         
-        compiler = FortranCompiler()
+        compiler = FortranCompiler(enable_optimizations=args.optimize)
         output = compiler.compile(source_code)
         
         if output:

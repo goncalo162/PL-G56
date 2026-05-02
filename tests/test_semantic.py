@@ -664,6 +664,9 @@ class TestSemanticExamples(unittest.TestCase):
             print(f"\nErros em exemplo5_conversor_bases.f:")
             for error in analyzer.get_errors():
                 print(f"  - {error}")
+
+        self.assertTrue(success,
+                       f"Análise semântica falhou: {analyzer.get_errors()}")
     
     def test_exemplo6_operacoes_reais(self):
         """Analisa ejemplo6_operacoes_reais.f - operações com REAL."""

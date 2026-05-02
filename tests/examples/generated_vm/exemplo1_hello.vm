@@ -1,0 +1,6 @@
+start
+// enter scope
+pushs "Ola, Mundo!"
+writes
+// leave scope
+stop

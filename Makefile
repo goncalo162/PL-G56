@@ -1,4 +1,7 @@
-.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs compile test-% test-%-verbose test-%-summary test-%-quick
+FORTRAN_ARGS := $(filter %.f,$(MAKECMDGOALS))
+
+.PHONY: help test-all test-coverage clean clean-all install lint setup venv docs compile compile-opt test-% test-%-verbose test-%-summary test-%-quick
+.PHONY: $(FORTRAN_ARGS)
 
 help:
 	@echo "Targets disponíveis:"
@@ -15,6 +18,7 @@ help:
 	@echo "  make lint             - Verifica código com linter"
 	@echo "  make docs             - Gera documentação HTML em docs/html"
 	@echo "  make compile <ficheiro.f> - Compila um ficheiro Fortran (ex: make compile tests/examples/exemplo1_hello.f)"
+	@echo "  make compile-opt <ficheiro.f> - Compila com otimizações de IR ativadas"
 	@echo "  make clean            - Remove ficheiros de cache"
 	@echo "  make clean-all        - Limpeza completa"
 
@@ -65,7 +69,10 @@ docs:
 compile:
 	./venv/bin/python -m src.main "$(word 2,$(MAKECMDGOALS))"
 
-%:
+compile-opt:
+	./venv/bin/python -m src.main --optimize "$(word 2,$(MAKECMDGOALS))"
+
+$(FORTRAN_ARGS):
 	@:
 
 clean:
@@ -73,5 +80,3 @@ clean:
 
 clean-all: clean
 	rm -rf htmlcov/ .coverage coverage*.xml dist/ build/ docs/html/
-
-
