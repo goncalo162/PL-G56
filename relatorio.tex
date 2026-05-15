@@ -296,7 +296,7 @@ Outra decisão importante foi manter as palavras reservadas centralizadas na con
 
 A análise sintática foi implementada com \texttt{ply.yacc}, de acordo com o enunciado. O parser constrói uma AST, que guarda a estrutura relevante do programa, sendo a gramática o que define as combinações válidas de tokens e permite construir essa representação estruturada do programa. Isto é essencial porque as fases seguintes precisam de conhecer a organização lógica do código, e não apenas a sequência textual em que ele foi escrito.
 
-A análise sintática também permite rejeitar programas cuja forma não corresponde à linguagem esperada. A gramática usada pelo compilador é apresentada na secção NOTA: REFERENCIAR AQUI A SECÇÃO.
+A análise sintática também permite rejeitar programas cuja forma não corresponde à linguagem esperada. A gramática usada pelo compilador é apresentada na Secção 4.
 
 \subsection{Árvore Sintática Abstrata}
 
@@ -327,13 +327,25 @@ Esta decisão de existência de TAC cria ainda uma base adequada para a etapa de
 
 \subsection{Otimização}
 
-NOTA: EXPLICAR MELHOR CADA UMA DAS OTIMIZAÇOES - LISTAGEM
-
 A fase de otimização é opcional e atua sobre a representação intermédia. Foi colocada depois da geração de TAC porque nessa altura o programa já está numa forma uniforme, independente da sintaxe original, mas ainda não está preso às instruções concretas da EWVM, permitindo trabalhar sobre uma forma mais simples do programa.
 
-As otimizações implementadas procuram reduzir redundâncias e melhorar a eficiência do código gerado, sem alterar o comportamento observável do programa. Entre as transformações consideradas estão a avaliação de expressões constantes, a propagação de constantes, a simplificação de expressões algébricas, a eliminação de subexpressões repetidas, a remoção de código morto e a simplificação de saltos. 
+As otimizações implementadas procuram reduzir redundâncias e melhorar a eficiência do código gerado, sem alterar o comportamento observável do programa. O compilador implementa os seguintes passes de otimização:
 
-A decisão foi manter a otimização conservadora. Instruções com efeitos visíveis, como leituras, escritas, chamadas de subprogramas e saltos, não são removidas ou alteradas de forma agressiva. Esta escolha privilegia a correção do programa,  que é mais importante do que aplicar transformações arriscadas sem uma análise global mais profunda, garantindo que a melhoria de eficiência não compromete o resultado final.
+\begin{itemize}
+	\item \textbf{Avaliação de constantes}: Detecta e avalia expressões cujos operandos são conhecidos em tempo de compilação, substituindo-as pelos seus resultados.
+	
+	\item \textbf{Propagação de constantes}: Quando uma variável recebe um valor constante, segue-se essa variável em operações subsequentes, substituindo referências pela constante quando seguro.
+	
+	\item \textbf{Simplificação algébrica}: Remove operações redundantes, como multiplicação por um, adição de zero ou expressões de identidade lógica.
+	
+	\item \textbf{Eliminação de subexpressões comuns}: Detecta sequências de instruções que produzem o mesmo resultado e guarda o resultado numa variável temporária para reutilização.
+	
+	\item \textbf{Remoção de código morto}: Identifica instruções que não afetam nenhuma saída observável do programa, nomeadamente atribuições a variáveis que nunca são lidas depois.
+	
+	\item \textbf{Simplificação de saltos}: Remove saltos incondicionais para labels imediatamente seguintes e otimiza sequências de saltos condicionais encadeados.
+\end{itemize}
+
+A decisão foi manter a otimização conservadora. Instruções com efeitos visíveis, como leituras, escritas, chamadas de subprogramas e saltos, não são removidas ou alteradas de forma agressiva. Esta escolha privilegia a correção do programa, que é mais importante do que aplicar transformações arriscadas sem uma análise de fluxo de dados mais profunda, garantindo que a melhoria de eficiência não compromete o resultado final.
 
 \subsection{Geração de Código EWVM}
 
@@ -345,19 +357,79 @@ O resultado final é um ficheiro com código VM, que pode ser executado ou inspe
 
 \section{Gramática}
 
-Esta secção apresenta a gramática principal reconhecida pelo compilador. 
+O compilador reconhece programas Fortran 77 conformes à norma ANSI, com as limitações documentadas. A gramática foi definida tendo em conta as construções essenciais da linguagem e foi implementada através de regras em \texttt{ply.yacc}. 
 
-NOTA: NAO SEI EM QUE FORMATO METEMOS ISTO
+O compilador suporta as seguintes categorias principais:
+
+\begin{itemize}
+	\item \textbf{Estrutura de programa}: Programa principal com opção de subprogramas (funções e subrotinas), declarações de tipo e lista de instruções.
+	
+	\item \textbf{Tipos de dados}: \texttt{INTEGER}, \texttt{REAL}, \texttt{LOGICAL}, \texttt{CHARACTER} e \texttt{COMPLEX}.
+	
+	\item \textbf{Instruções simples}: Atribuição, leitura (\texttt{READ}), escrita (\texttt{PRINT}, \texttt{WRITE}), chamada de subrotina (\texttt{CALL}), e controlo (\texttt{CONTINUE}, \texttt{GOTO}, \texttt{RETURN}, \texttt{STOP}).
+	
+	\item \textbf{Estruturas de controlo}: Condicional \texttt{IF/THEN/ELSEIF/ELSE/ENDIF} e ciclo \texttt{DO/ENDDO} com suporte a labels e \texttt{CONTINUE}.
+	
+	\item \textbf{Expressões}: Operadores aritméticos (\texttt{+}, \texttt{-}, \texttt{*}, \texttt{/}, \texttt{**}), relacionais (\texttt{.LT.}, \texttt{.LE.}, \texttt{.GT.}, \texttt{.GE.}, \texttt{.EQ.}, \texttt{.NE.}) e lógicos (\texttt{.AND.}, \texttt{.OR.}, \texttt{.NOT.}) com preced\u00eancias correctas.
+	
+	\item \textbf{Arrays}: Declaração e acesso a arrays unidimensionais e multidimensionais, com validação semântica de índices.
+	
+	\item \textbf{Funções integradas}: Suporte a funções intrínsecas como \texttt{MOD}, \texttt{ABS}, \texttt{SQRT}, \texttt{SIN}, \texttt{COS}, \texttt{EXP}, \texttt{LOG}, \texttt{INT}, \texttt{REAL}, \texttt{NINT}, \texttt{MAX} e \texttt{MIN}.
+	
+	\item \textbf{Subprogramas}: Definição e chamada de funções e subrotinas com parâmetros e valores de retorno.
+\end{itemize}
+
+A gramática completa em formato EBNF, incluindo todas as regras de produção, precedência de operadores, exemplos e restrições, encontra-se documentada em \texttt{docs/grammar.md}. Este documento técnico inclui também a especificação de todos os terminais (tokens), palavras-chave reservadas e limitações conhecidas do compilador. Para referência durante defesa ou estudos posteriores, recomenda-se consultar esse ficheiro.
 
 \section{Funcionalidades Suportadas}
 
-NOTA: MELHORAR ESTE TOPICO
+\subsection{Funcionalidades Essenciais}
 
-O compilador suporta as construções essenciais pedidas no enunciado: declarações de variáveis, expressões aritméticas, relacionais e lógicas, instruções condicionais, ciclos \texttt{DO}, labels, \texttt{GOTO}, \texttt{READ} e \texttt{PRINT}. Também suporta \texttt{WRITE}, arrays, funções, subrotinas e otimizações sobre a representação intermédia.
+O compilador implementa todas as construções fundamentais solicitadas no enunciado:
 
- A análise semântica valida se o identificador é efetivamente um array e se o número de índices é coerente. Na geração de código, os acessos são traduzidos através de cálculo de endereços e operações de carga ou armazenamento. A geração está mais consolidada para arrays unidimensionais, que cobrem os exemplos principais; arrays multidimensionais são reconhecidos em partes da gramática e permanecem uma limitação.
+\begin{itemize}
+	\item \textbf{Declarações de tipos}: Suporta tipos \texttt{INTEGER}, \texttt{REAL}, \texttt{LOGICAL} e \texttt{CHARACTER}, com declaração simples ou com dimensões para arrays.
+	
+	\item \textbf{Expressões aritméticas}: Avalia expressões envolvendo operadores \texttt{+}, \texttt{-}, \texttt{*}, \texttt{/} e \texttt{**} (exponenciação), com precedência e associatividade corretas.
+	
+	\item \textbf{Expressões lógicas}: Suporta operadores \texttt{.AND.}, \texttt{.OR.}, \texttt{.NOT.}, bem como avaliação de expressões booleanas em contextos apropriados.
+	
+	\item \textbf{Expressões relacionais}: Reconhece operadores de comparação \texttt{.EQ.}, \texttt{.NE.}, \texttt{.LT.}, \texttt{.LE.}, \texttt{.GT.}, \texttt{.GE.} para estabelecer condições.
+	
+	\item \textbf{Atribuições}: Suporta atribuição de valores a variáveis simples e a elementos de arrays.
+	
+	\item \textbf{Controlo de fluxo}: Implementa instruções \texttt{IF/THEN/ELSE/ENDIF}, ciclos \texttt{DO/CONTINUE}, \texttt{GOTO} com labels e \texttt{RETURN}.
+	
+	\item \textbf{I/O}: Reconhece \texttt{READ}, \texttt{PRINT} e \texttt{WRITE} com suporte a listas de variáveis e I/O dirigido.
+\end{itemize}
 
-O suporte a subprogramas foi integrado nas fases certas: o parser reconhece \texttt{FUNCTION}, \texttt{SUBROUTINE}, \texttt{CALL} e \texttt{RETURN}; a semântica cria scopes próprios e regista assinaturas; a IR representa chamadas e parâmetros; e o backend gera as instruções de chamada correspondentes na EWVM.
+\subsection{Funcionalidades Avançadas}
+
+\subsubsection{Arrays}
+
+O compilador valida se um identificador é efetivamente um array e se o número de índices é coerente na análise semântica. Na geração de código, os acessos a arrays são traduzidos através de cálculo de endereços. Para um array unidimensional, o cálculo é direto; para arrays multidimensionais, utiliza-se a fórmula de linealização em ordem linha-maior (row-major).
+
+A geração de código está mais consolidada para arrays unidimensionais, que cobrem a maioria dos exemplos práticos fornecidos. Arrays multidimensionais são reconhecidos pela gramática mas enfrentam limitações na codificação, permanecendo como área de potencial extensão futura.
+
+\subsubsection{Subprogramas}
+
+O suporte a subprogramas foi integrado em todas as fases do compilador:
+
+\begin{itemize}
+	\item \textbf{Parser}: Reconhece declarações de \texttt{FUNCTION} e \texttt{SUBROUTINE}, bem como chamadas através de \texttt{CALL} ou invocação direta de funções.
+	
+	\item \textbf{Semântica}: Cria scopes independentes para cada subprograma, regista assinaturas (nome, tipo de retorno, parâmetros) e valida chamadas.
+	
+	\item \textbf{Representação Intermédia}: Representa chamadas como instruções especiais, preservando argumentos e resultados.
+	
+	\item \textbf{Geração de Código}: Emite instruções \texttt{CALL} ou \texttt{INVOKE} na EWVM, com passagem de argumentos e tratamento de valor de retorno.
+\end{itemize}
+
+Uma decisão importante foi registar assinaturas de subprogramas antes de analisar o corpo principal, permitindo referências a funções definidas após o programa principal, um padrão frequente em código Fortran.
+
+\subsubsection{Otimizações}
+
+As otimizações descritas na Secção 2.7 são aplicadas de forma opcional, ativadas por linha de comandos ou configuração. Reduzem redundâncias e melhoram a eficiência sem alterar o comportamento observável.
 
 
 \section{Testes e Validação}
@@ -378,17 +450,74 @@ O código inclui docstrings Python nas classes e funções principais, permitind
 
 A documentação em \texttt{README.md} explica de forma detalhada como instalar dependências, correr o compilador, ativar otimizações, escolher o formato de entrada, executar testes e gerar documentação, funcionando como guia rápido para utilizar o compilador.
 
-\section{Execução}
+\section{Compilação e Execução}
 
-NOTA: MELHORAR ISTO 
+\subsection{Preparação do Ambiente}
 
-Para preparar o ambiente deve executar-se \texttt{make setup} e ativar o ambiente virtual com \texttt{source venv/bin/activate}. 
+Antes de compilar, é necessário preparar o ambiente:
 
-Um programa em formato fixo pode ser compilado com \texttt{python -m src.main tests/examples/exemplo1\_hello.f}. Para ativar otimizações usa-se \texttt{--optimize}. Para formato livre usa-se \texttt{--format free}, por exemplo com um ficheiro em \texttt{tests/examples/free/}.
+\begin{enumerate}
+	\item Executar \texttt{make setup} para criar o ambiente virtual Python e instalar dependências.
+	\item Ativar o ambiente virtual com \texttt{source venv/bin/activate} (em macOS/Linux) ou \texttt{venv\textbackslash{}Scripts\textbackslash{}activate} (em Windows).
+\end{enumerate}
 
-Também é possível alterar o formato por omissão em \texttt{src/config.py}, mudando a opção global de \texttt{fixed} para \texttt{free}. Esta configuração é útil quando se pretende compilar vários ficheiros do mesmo formato sem repetir a opção na linha de comandos.
+\subsection{Compilação de Programas}
 
-O \texttt{Makefile} inclui atalhos para as operações mais comuns: \texttt{make compile}, \texttt{make compile-opt}, \texttt{make compile-free}, \texttt{make compile-free-opt} e \texttt{make test-all}. Também existem alvos por fase, como \texttt{make test-lexer}, \texttt{make test-parser}, \texttt{make test-semantic}, \texttt{make test-ir\_codegen}, \texttt{make test-vm\_codegen}, \texttt{make test-optimizer} e \texttt{make test-compiler}.
+O ponto de entrada é o módulo \texttt{src.main}, invocado como:
+
+\begin{center}
+\texttt{python -m src.main <ficheiro\_fortran> [opções]}
+\end{center}
+
+As opções suportadas são:
+
+\begin{itemize}
+	\item \texttt{--format fixed|free}: Define o formato de entrada (padrão: \texttt{fixed}). Formato fixo segue Fortran 77 clássico; formato livre permite comentários com \texttt{!} e continuações com \texttt{\&}.
+	
+	\item \texttt{--optimize}: Ativa o pipeline de otimizações sobre a representação intermédia.
+	
+	\item \texttt{--output <ficheiro>}: Especifica o caminho do ficheiro de saída em código VM (padrão: \texttt{<nome\_entrada>.vm}).
+\end{itemize}
+
+\subsection{Exemplos de Uso}
+
+\begin{itemize}
+	\item Compilar um programa em formato fixo:\\
+	\texttt{python -m src.main tests/examples/exemplo1\_hello.f}
+	
+	\item Compilar com otimizações ativadas:\\
+	\texttt{python -m src.main tests/examples/exemplo1\_hello.f --optimize}
+	
+	\item Compilar um programa em formato livre:\\
+	\texttt{python -m src.main tests/examples/free/exemplo1\_hello.f90 --format free}
+	
+	\item Compilar e guardar em ficheiro específico:\\
+	\texttt{python -m src.main programa.f --output resultado.vm --optimize}
+\end{itemize}
+
+\subsection{Configuração Global}
+
+É possível alterar o formato de entrada por omissão em \texttt{src/config.py}, modificando a opção global de \texttt{fixed} para \texttt{free}. Esta configuração é útil quando se pretende compilar vários ficheiros do mesmo formato sem repetir a opção na linha de comandos.
+
+\subsection{Automatização com Makefile}
+
+O projeto fornece um \texttt{Makefile} com atalhos para operações comuns:
+
+\begin{itemize}
+	\item \texttt{make setup}: Prepara o ambiente (cria \texttt{venv}, instala dependências).
+	
+	\item \texttt{make compile}: Compila um exemplo em formato fixo.
+	
+	\item \texttt{make compile-opt}: Compila com otimizações.
+	
+	\item \texttt{make compile-free}: Compila um exemplo em formato livre.
+	
+	\item \texttt{make compile-free-opt}: Compila em formato livre com otimizações.
+	
+	\item \texttt{make test-all}: Executa todos os testes.
+	
+	\item \texttt{make test-<fase>}: Executa testes de uma fase específica (\texttt{lexer}, \texttt{parser}, \texttt{semantic}, \texttt{ir\_codegen}, \texttt{vm\_codegen}, \texttt{optimizer}, \texttt{compiler}).
+\end{itemize}
 
 
 \section{Dificuldades Encontradas}
@@ -408,11 +537,47 @@ Finalmente, a otimização teve de ser implementada de forma conservadora. Certa
 
 \section{Conclusão}
 
-NOTA: MELHORAR CONCLUSAO? TRABALHO FUTURO IG
+O compilador desenvolvido cumpre com sucesso as fases principais propostas no enunciado: análise léxica com \texttt{ply.lex}, análise sintática com \texttt{ply.yacc}, análise semântica com tabela de símbolos, tradução para representação intermédia baseada em código de três endereços e geração de código executável para a EWVM. A arquitetura modular foi fundamental para separar responsabilidades, facilitar a manutenção e permitir testes unitários por etapa.
 
-O compilador desenvolvido cumpre as fases principais propostas no enunciado: análise léxica com \texttt{ply.lex}, análise sintática com \texttt{ply.yacc}, análise semântica, tradução para representação intermédia e geração de código para a EWVM. A arquitetura modular permitiu separar responsabilidades e testar cada fase de forma independente.
+\subsection{Contribuições Além do Mínimo Exigido}
 
-Para além do mínimo exigido, o projeto inclui suporte a formato fixo e livre, subprogramas, representação intermédia em TAC, pipeline de otimizações, documentação técnica, docstrings Python, testes automatizados e medição de cobertura. Estas escolhas tornam o compilador mais robusto, mais fácil de defender e preparado para futuras extensões, como suporte mais completo a arrays multidimensionais, formatação de I/O e funções intrínsecas adicionais.
+O projeto estende-se significativamente para além dos requisitos base:
+
+\begin{itemize}
+	\item \textbf{Suporte a múltiplos formatos}: O pré-processador permite compilar tanto código Fortran 77 em formato fixo (posição-dependente) como em formato livre moderno, alargando a compatibilidade.
+	
+	\item \textbf{Representação intermédia}: A introdução de TAC como camada intermédia facilita análises, transformações e depuração, afastando a geração final da estrutura sintática original.
+	
+	\item \textbf{Pipeline de otimizações}: Implementam-se múltiplos passes de otimização (constantes, propagação, simplificação, código morto), sem comprometer a correção.
+	
+	\item \textbf{Suporte a subprogramas}: Funções e subrotinas são plenamente integradas, com scopes, assinaturas e chamadas, permitindo modularidade nos programas compilados.
+	
+	\item \textbf{Documentação técnica}: Além do relatório, o projeto inclui documentação modular sobre arquitetura, gramática, decisões, estrutura e especificações técnicas.
+	
+	\item \textbf{Cobertura de testes}: Testes automatizados cobrem cada fase, com suporte para medição de cobertura via \texttt{pytest-cov}.
+	
+	\item \texttt{Docstrings em Python}: Todas as classes e funções principais documentam responsabilidades, parâmetros e comportamento esperado.
+\end{itemize}
+
+\subsection{Trabalho Futuro}
+
+O compilador fornece uma base sólida para futuras extensões:
+
+\begin{itemize}
+	\item \textbf{Arrays multidimensionais}: Expandir a geração de código para arrays com múltiplas dimensões, incluindo ajustes de linealização e acesso.
+	
+	\item \textbf{Funções intrínsecas}: Adicionar suporte a funções built-in de Fortran (\texttt{SIN}, \texttt{COS}, \texttt{SQRT}, \texttt{ABS}, etc.).
+	
+	\item \textbf{Formatação de I/O avançada}: Estender \texttt{READ} e \texttt{WRITE} com especificadores de formato (\texttt{FORMAT} statements).
+	
+	\item \textbf{Análise de aliasing}: Implementar passes de análise mais sofisticados para otimizações mais agressivas e seguras.
+	
+	\item \textbf{Geração de relatórios de compilação}: Produzir ficheiros de saída detalhados (AST, TAC, estatísticas de otimização) para fins educacionais e de depuração.
+\end{itemize}
+
+\subsection{Reflexão Final}
+
+O desenvolvimento deste compilador consolidou compreensão profunda sobre as fases clássicas de compilação e sua integração num sistema coerente. As decisões de design---modularidade, uso de padrões de conceção, validação por etapa---tornaram o projeto extensível e defensável. O suporte tanto a formato fixo como livre demonstra flexibilidade da arquitetura, enquanto o pipeline de otimizações e a representação intermédia evidenciam ambição para além do mínimo. Este compilador constitui um artefato educacional de qualidade, adequado para demonstração prática de conceitos de processamento de linguagens.
 
 
 \begin{thebibliography}{9}

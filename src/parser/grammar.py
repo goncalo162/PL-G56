@@ -2,8 +2,9 @@
 Definição da Gramática Fortran 77
 =================================
 
-Define a gramática BNF do Fortran 77 para referência.
-Utilizada como especificação pelo parser (ply.yacc).
+Define a gramática BNF efetivamente aceite pelo parser (ply.yacc).
+O parser importa deste módulo a tabela PRECEDENCE; a string GRAMMAR serve
+como referência sincronizada com as regras `p_*` de `parser.py`.
 """
 
 # GRAMÁTICA FORTRAN 77 - FORMATO EBNF
@@ -12,10 +13,10 @@ GRAMMAR = """
 
 # Programa e Unidades
 
-program         : 'PROGRAM' IDENTIFIER
-                  declarations statements 'END'
-                | 'PROGRAM' IDENTIFIER  
-                  declarations statements subprograms 'END'
+program         : 'PROGRAM' IDENTIFIER declarations statements 'END' subprograms_opt
+
+subprograms_opt : subprograms
+                | /* empty */
 
 subprograms     : subprogram
                 | subprograms subprogram
@@ -27,6 +28,8 @@ function_def    : type_spec 'FUNCTION' IDENTIFIER '(' param_list ')'
                   declarations statements 'END'
 
 subroutine_def  : 'SUBROUTINE' IDENTIFIER '(' param_list ')'
+                  declarations statements 'END'
+                | 'SUBROUTINE' IDENTIFIER
                   declarations statements 'END'
 
 param_list      : IDENTIFIER
@@ -40,13 +43,11 @@ declarations    : declaration
                 | /* empty */
 
 declaration     : type_spec var_list
-                | 'DIMENSION' array_list
-                | 'PARAMETER' '(' param_assign_list ')'
 
 type_spec       : 'INTEGER'
                 | 'REAL'
                 | 'LOGICAL'
-                | 'CHARACTER' dimension_opt
+                | 'CHARACTER'
                 | 'COMPLEX'
 
 var_list        : var_decl
@@ -55,9 +56,6 @@ var_list        : var_decl
 var_decl        : IDENTIFIER
                 | IDENTIFIER '(' dimension_list ')'
                 | IDENTIFIER '=' expression
-
-array_list      : IDENTIFIER '(' dimension_list ')'
-                | array_list ',' IDENTIFIER '(' dimension_list ')'
 
 dimension_list  : expression ':' expression
                 | dimension_list ',' expression ':' expression
@@ -73,23 +71,31 @@ statements      : statement
 statement       : label_opt simple_statement
                 | label_opt control_statement
 
-label_opt       : INTEGER
+label_opt       : INTEGER_LITERAL
                 | LABEL
                 | /* empty */
 
-simple_statement: assignment
+simple_statement : assignment
                 | read_stmt
                 | print_stmt
                 | write_stmt
                 | call_stmt
-                | 'CONTINUE'
-                | 'RETURN'
-                | 'GOTO' INTEGER
-                | 'GOTO' LABEL
-                | 'STOP'
+                | continue_stmt
+                | goto_stmt
+                | return_stmt
+                | stop_stmt
 
-control_statement: if_stmt
+control_statement : if_stmt
                  | do_stmt
+
+continue_stmt   : 'CONTINUE'
+
+goto_stmt       : 'GOTO' INTEGER_LITERAL
+                | 'GOTO' LABEL
+
+return_stmt     : 'RETURN'
+
+stop_stmt       : 'STOP'
 
 assignment      : IDENTIFIER '=' expression
                 | IDENTIFIER '(' subscript_list ')' '=' expression
@@ -100,8 +106,8 @@ read_stmt       : 'READ' '(' io_spec ')' io_list
                 | 'READ' '*'
 
 print_stmt      : 'PRINT' '*' expr_list
+                | 'PRINT' '*' ',' expr_list
                 | 'PRINT' '*'
-                | 'PRINT' format_spec expr_list
 
 write_stmt      : 'WRITE' '(' io_spec ')' expr_list
                 | 'WRITE' '(' io_spec ')'
@@ -111,7 +117,7 @@ call_stmt       : 'CALL' IDENTIFIER
 
 io_spec         : '*'
                 | IDENTIFIER
-                | io_spec ',' INTEGER
+                | io_spec ','
                 | io_spec ',' IDENTIFIER
 
 io_list         : io_item
@@ -128,11 +134,9 @@ expr_list       : expression
                 | expr_list ',' expression
                 | /* empty */
 
-if_stmt         : 'IF' '(' expression ')' 'THEN'
-                  statements
-                  elseif_list
-                  else_opt
-                  'ENDIF'
+if_stmt         : 'IF' '(' expression ')' 'THEN' statements 'ENDIF'
+                | 'IF' '(' expression ')' 'THEN' statements 'ELSE' statements 'ENDIF'
+                | 'IF' '(' expression ')' 'THEN' statements elseif_list else_opt 'ENDIF'
 
 elseif_list     : elseif_clause
                 | elseif_list elseif_clause
@@ -143,71 +147,63 @@ elseif_clause   : 'ELSEIF' '(' expression ')' 'THEN' statements
 else_opt        : 'ELSE' statements
                 | /* empty */
 
-do_stmt         : 'DO' label_opt IDENTIFIER '=' expression ',' expression step_opt
-                  statements
-                  label_opt 'CONTINUE'
-                | 'DO' label_opt IDENTIFIER '=' expression ',' expression step_opt
+do_stmt         : 'DO' IDENTIFIER '=' expression ',' expression
                   statements
                   'ENDDO'
-                | 'DO' IDENTIFIER '=' expression ',' expression step_opt
-                  statements
-                  label_opt 'CONTINUE'
-                | 'DO' IDENTIFIER '=' expression ',' expression step_opt
+                | 'DO' LABEL IDENTIFIER '=' expression ',' expression
                   statements
                   'ENDDO'
-
-step_opt        : ',' expression
-                | /* empty */
+                | 'DO' INTEGER_LITERAL IDENTIFIER '=' expression ',' expression
+                  statements
+                  'ENDDO'
+                | 'DO' IDENTIFIER '=' expression ',' expression
+                  statements
+                  label_opt 'CONTINUE'
+                | 'DO' IDENTIFIER '=' expression ',' expression
+                  statements
+                  INTEGER_LITERAL 'CONTINUE'
+                | 'DO' LABEL IDENTIFIER '=' expression ',' expression
+                  statements
+                  LABEL 'CONTINUE'
+                | 'DO' LABEL IDENTIFIER '=' expression ',' expression
+                  statements
+                  INTEGER_LITERAL 'CONTINUE'
+                | 'DO' INTEGER_LITERAL IDENTIFIER '=' expression ',' expression
+                  statements
+                  LABEL 'CONTINUE'
+                | 'DO' INTEGER_LITERAL IDENTIFIER '=' expression ',' expression
+                  statements
+                  INTEGER_LITERAL 'CONTINUE'
 
 # Expressões
 
-expression      : or_expr
-
-or_expr         : and_expr
-                | or_expr '.OR.' and_expr
-
-and_expr        : not_expr
-                | and_expr '.AND.' not_expr
-
-not_expr        : rel_expr
-                | '.NOT.' rel_expr
-
-rel_expr        : add_expr
-                | rel_expr rel_op add_expr
-
-rel_op          : '.LT.'
-                | '.LE.'
-                | '.GT.'
-                | '.GE.'
-                | '.EQ.'
-                | '.NE.'
-
-add_expr        : mul_expr
-                | add_expr '+' mul_expr
-                | add_expr '-' mul_expr
-
-mul_expr        : pow_expr
-                | mul_expr '*' pow_expr
-                | mul_expr '/' pow_expr
-
-pow_expr        : unary_expr
-                | pow_expr '**' unary_expr
-
-unary_expr      : primary
-                | '+' unary_expr
-                | '-' unary_expr
-
-primary         : INTEGER_LIT
-                | REAL_LIT
-                | STRING_LIT
-                | LOGICAL_LIT
-                | IDENTIFIER
-                | IDENTIFIER '(' expr_list ')'
-                | IDENTIFIER '(' subscript_list ')'
+expression      : expression '+' expression
+                | expression '-' expression
+                | expression '*' expression
+                | expression '/' expression
+                | expression '**' expression
+                | expression '.LT.' expression
+                | expression '.LE.' expression
+                | expression '.GT.' expression
+                | expression '.GE.' expression
+                | expression '.EQ.' expression
+                | expression '.NE.' expression
+                | expression '.AND.' expression
+                | expression '.OR.' expression
+                | '+' expression
+                | '-' expression
+                | '.NOT.' expression
                 | '(' expression ')'
-                | binary_function
+                | function_call
+                | INTEGER_LITERAL
+                | REAL_LITERAL
+                | STRING_LITERAL
+                | LOGICAL_LITERAL
+                | IDENTIFIER
+                | IDENTIFIER '(' subscript_list ')'
 
-binary_function : 'MOD' '(' expression ',' expression ')'
+function_call   : IDENTIFIER '(' expr_list ')'
+                | 'MOD' '(' expression ',' expression ')'
                 | 'MAX' '(' expr_list ')'
                 | 'MIN' '(' expr_list ')'
                 | 'ABS' '(' expression ')'
@@ -223,7 +219,7 @@ binary_function : 'MOD' '(' expression ',' expression ')'
 # Terminais
 
 IDENTIFIER      : letra (letra | digito | '_')*
-INTEGER_LIT     : digito+
+INTEGER_LITERAL : digito+
 REAL_LIT        : digito+ '.' digito*
                 | digito* '.' digito+
                 | (digito+ | digito+ '.' digito* | digito* '.' digito+) 'E' ('+' | '-')? digito+
@@ -232,7 +228,7 @@ LOGICAL_LIT     : '.TRUE.' | '.FALSE.'
 
 """
 
-# Precedência dos Operadores (da menor para maior)
+# Precedência dos Operadores (da menor para maior), usada por parser.py
 PRECEDENCE = (
     ('left', 'OR'), # .OR. tem menor precedência que .AND.
     ('left', 'AND'), # .AND. tem menor precedência que .NOT.
