@@ -87,6 +87,11 @@ class TypeChecker:
             if TypeChecker.is_logical(left_type) and TypeChecker.is_logical(right_type):
                 return 'LOGICAL'
             raise SemanticError(f"Operador {operator} requer tipos LOGICAL")
+
+        if operator == '//':
+            if TypeChecker.is_character(left_type) and TypeChecker.is_character(right_type):
+                return 'CHARACTER'
+            raise SemanticError("Operador // requer tipos CHARACTER")
         
         # Operadores relacionais retornam LOGICAL
         if operator in ['.LT.', '.LE.', '.GT.', '.GE.', '.EQ.', '.NE.']:

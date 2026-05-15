@@ -1,0 +1,426 @@
+%% LaTeX2e template for FEUP's Projeto Integrador
+
+%% 
+%% FEUP, JCL, Tue Jan 30 21:57:48 2024
+%%
+%% PLEASE send improvements to jlopes at fe.up.pt (up till 2028 :-)
+
+\documentclass[11pt,a4paper]{report}
+
+%%------------------------------- preamble ------------------------------------
+
+%% comment next for EN
+\usepackage{tikz}
+\usepackage[utf8]{inputenc}       % accents
+\usepackage[T1]{fontenc}          % PS fonts
+\usepackage{newtxtext,newtxmath}  % do not use CM fonts
+\usepackage{amsmath} 
+\usepackage{wrapfig}
+% multi-line and other mathematical statements
+\usepackage{setspace}             % setting the spacing between lines
+\usepackage[normalem]{ulem}       % various types of underlining
+\usepackage{caption}              % rotating captions, sideways captions, etc.
+\usepackage{float}                % tables and figures in the multi-column environment 
+\usepackage{subcaption}           % for subfigures and the like
+\usepackage{longtable}            % tables that continue to the next page
+\usepackage{multirow}             % tabular cells spanning multiple rows
+\usepackage[table]{xcolor}        % driver-independent color extensions
+\usepackage{lipsum}               % loren dummy text
+\setlength{\marginparwidth}{2cm}  % todonotes' requirements
+\usepackage{todonotes}            % todo's
+\usepackage{csquotes}             % context sensitive quotation facilities
+\usepackage[backend=biber,authordate]{biblatex-chicago}  % Chicago Manual of Style
+\usepackage[acronym]{glossaries-extra}
+\usepackage{arydshln}
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+
+%% document dimensions
+\usepackage[a4paper,left=25mm,right=25mm,top=25mm,bottom=25mm,headheight=6mm,footskip=12mm]{geometry}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{1ex}
+
+%% headers & footers
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\fancyhf{}                            % clear off all default fancyhdr headers and footers
+\rhead{\small{\emph{\projtitle, \projauthor}}}
+\rfoot{\small{\thepage\ de \pageref{LastPage}}} % Paginação no rodapé direito
+\pagestyle{fancy}                     % apply the fancy header style
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\pagestyle{fancy}
+
+\usepackage{float}
+
+%% Hiperlinks no documento
+\usepackage{hyperref}
+\hypersetup{
+    hidelinks, % Esconde cores nos links
+    linktoc=all, % Habilita links no índice
+    colorlinks=false
+}
+
+%% colors
+\usepackage{color}
+\definecolor{engineering}{rgb}{0.549,0.176,0.098}
+\definecolor{cloudwhite}{cmyk}{0,0,0,0.025}
+\usepackage{booktabs} % Para tabelas mais bonitas
+\usepackage{array}
+%% source-code listings
+\usepackage{listings}
+\lstset{ %
+ language=C,                        % choose the language of the code
+ basicstyle=\footnotesize\ttfamily,
+ keywordstyle=\bfseries,
+ numbers=left,                      % where to put the line-numbers
+ numberstyle=\scriptsize\texttt,    % the size of the fonts that are used for the line-numbers
+ stepnumber=1,                      % the step between two line-numbers. If it's 1 each line will be numbered
+ numbersep=8pt,                     % how far the line-numbers are from the code
+ frame=tb,
+ float=htb,
+ aboveskip=8mm,
+ belowskip=4mm,
+ backgroundcolor=\color{cloudwhite},
+ showspaces=false,                  % show spaces adding particular underscores
+ showstringspaces=false,            % underline spaces within strings
+ showtabs=false,                    % show tabs within strings adding particular underscores
+ tabsize=2,                         % sets default tabsize to 2 spaces
+ captionpos=t,                      % sets the caption-position to top
+ belowcaptionskip=12pt,             % space between caption and listing
+ breaklines=true,                   % sets automatic line breaking
+ breakatwhitespace=false,           % sets if automatic breaks should only happen at whitespace
+ escapeinside={\%*}{*)},            % if you want to add a comment within your code
+ morekeywords={*,var,template,new}  % if you want to add more keywords to the set
+}
+
+%% hyperreferences (HREF, URL)
+\usepackage{hyperref}
+\hypersetup{
+    %plainpages=false, 
+    %pdfpagelayout=SinglePage,
+    %bookmarksopen=false,
+    %bookmarksnumbered=true,
+    %breaklinks=true,
+    %linktocpage,
+    hidelinks,
+    linktoc=all,
+    colorlinks=false,
+    %linkcolor=engineering,
+    %urlcolor=engineering,
+    %filecolor=engineering,
+    %citecolor=engineering,
+    %allcolors=engineering
+}
+
+
+
+%% path to the figures directory
+\graphicspath{{figures/}}
+
+%% bibliography file, must be in preamble
+\addbibresource{bibliography.bib}
+
+%% macros, to be updated as needed
+\newcommand{\school}{Universidade do Minho}
+\newcommand{\degree}{Licenciatura em Engenharia Informática}
+\newcommand{\projtitle}{Processamento de linguagens}
+\newcommand{\subtitle}{2025/2026}
+\newcommand{\projauthor}{Grupo 56}
+\newcommand{\projname}{Construção de um Compilador para Fortran 77 Standard}
+
+
+%% my other macros, if needed
+\newcommand{\windspt}{\textsf{WindsPT\/}}
+\newcommand{\windscannerpt}{\emph{Windscanner.PT\/}}
+\newcommand{\class}[1]{{\normalfont\sffamily #1\/}}
+\newcommand{\svg}{\class{SVG}}
+
+%% my environments for infos
+\newenvironment{info}[1]{\vspace*{6mm}\color{blue}[ \textbf{INFO:} \begin{em} #1}
+                        {\vspace*{3mm}\end{em} ]}
+\newenvironment{infoopt}[1]{\vspace*{6mm}\color{blue}[ \textbf{INFO (elemento opcional):} \begin{em} #1}
+                        {\vspace*{3mm}\end{em} ]}
+                        
+\renewcommand{\thesection}{\arabic{section}}
+
+
+%%------------------------------- document-------------------------------------
+
+\begin{document}
+
+
+%%------------------------------- cover page ----------------------------------
+
+\begin{titlepage}
+\center
+
+\vspace{-15mm}
+
+\includegraphics[width=52mm]{universidade.png}
+
+\vspace{0.5cm} 
+
+{\large \textbf{\textsc{\school}}}\\
+
+\vspace{0.5cm} % Espaço entre a imagem e as informações adicionais
+
+{\large \degree}\\[8mm]
+
+\vspace{2cm} % Espaço entre a imagem e as informações adicionais
+
+{\Large \projtitle}\\[2mm]
+{\large \subtitle}\\[28mm]
+
+{\Large \textbf{\projauthor}}\\
+\vspace{0.5cm}
+{\Large \projname}\\
+
+\vspace{0.5cm} % Espaço entre a imagem e as informações adicionais
+
+
+\vspace{6cm} % Espaço entre a imagem e as informações adicionais
+
+{\large A106804, Alice Soares} \\[2mm]
+{\large A106914, Gonçalo Martins} \\[2mm]
+{\large A107367, João Azevedo} \\[10mm]
+
+
+{\Large Maio 2026}
+
+\end{titlepage}
+
+%%------------------------------- avaliação pelos pares -----------------------
+
+\newpage
+
+
+%%------------------------------- table of contents ---------------------------
+
+%% redefine tableofcontents text, ONLY for PT
+\renewcommand{\contentsname}{Índice}
+\onehalfspacing
+\tableofcontents
+\singlespacing
+
+
+
+\newpage
+
+%==================================================
+\section{Introdução}
+
+O objetivo do projeto foi desenvolver um compilador para Fortran 77 standard, de acordo com o enunciado da unidade curricular de Processamento de Linguagens. O compilador deve reconhecer programas escritos em Fortran, validar a sua estrutura sintática e coerência semântica, e traduzir o código fonte para instruções executáveis na máquina virtual EWVM disponibilizada na unidade curricular.
+
+A solução foi implementada em Python com recurso às ferramentas \texttt{ply.lex} e \texttt{ply.yacc}, seguindo uma arquitetura modular inspirada nas fases clássicas de compilação. O projeto encontra-se organizado em componentes independentes, responsáveis pelas diferentes etapas do processo de compilação, o que facilita a manutenção, os testes e a extensão futura do compilador.
+
+Para além dos requisitos mínimos definidos no enunciado, foram também implementadas funcionalidades de valorização, incluindo criação da representação intermédia, otimizações de código, suporte a subprogramas e compatibilidade com diferentes formatos de código fonte Fortran. Estas opções não foram tratadas como acrescentos isolados, mas sim, integradas nas respetivas fases.
+
+\section{Arquitetura e Implementação}
+
+A arquitetura adotada e a organização do projeto foram pensadas para responder diretamente aos critérios de avaliação propostos. Segue ainda uma pipeline clássica de compilação, com separação clara entre fases. O fluxo global é:
+
+\begin{center}
+\usetikzlibrary{arrows.meta, positioning, calc}
+
+\begin{tikzpicture}[
+  node distance=0.5cm,
+  box/.style={
+    rectangle,
+    draw,
+    rounded corners=4pt,
+    minimum width=2.0cm,
+    minimum height=1.0cm,
+    align=center,
+    font=\small
+  },
+  arr/.style={-{Stealth[length=4pt]}, thick}
+]
+
+% Row 1
+\node[box] (fortran)   {Código\\Fortran};
+\node[box, right=of fortran]  (pre)  {Pré-\\processamento};
+\node[box, right=of pre]      (lex)  {Análise\\léxica};
+\node[box, right=of lex]      (syn)  {Análise\\sintática};
+\node[box, right=of syn]      (ast)  {AST};
+
+% Row 2 (aligned below row 1)
+\node[box, below=1.2cm of fortran] (sem)  {Análise\\semântica};
+\node[box, right=of sem]           (tac)  {Repr.\ inter.\\/ TAC};
+\node[box, right=of tac]           (opt)  {Otimizações\\opcionais};
+\node[box, right=of opt]           (ewvm) {Código\\EWVM};
+
+% Row 1 arrows
+\draw[arr] (fortran) -- (pre);
+\draw[arr] (pre)     -- (lex);
+\draw[arr] (lex)     -- (syn);
+\draw[arr] (syn)     -- (ast);
+
+% Bend from AST down to sem
+\draw[arr] (ast.south) -- ++(0,-0.35) -- ($(sem.north)+(0,0.35)$) -- (sem.north);
+
+% Row 2 arrows
+\draw[arr] (sem)  -- (tac);
+\draw[arr] (tac)  -- (opt);
+\draw[arr] (opt)  -- (ewvm);
+
+% Sublabels
+\node[font=\scriptsize, below=2pt of lex]  {\texttt{ply.lex}};
+\node[font=\scriptsize, below=2pt of syn]  {\texttt{ply.yacc}};
+
+\end{tikzpicture}
+\end{center}
+
+O ponto de entrada do compilador é a classe \texttt{FortranCompiler}, responsável por coordenar as diferentes fases do processo de compilação, desde a leitura do programa Fortran até à geração de código EWVM. Esta classe também permite configurar opções relevantes, como a ativação de otimizações e a escolha entre formato fixo e formato livre. A decisão de centralizar a orquestração nesta classe evita que as fases fiquem acopladas entre si. 
+
+A arquitetura do projeto foi organizada de forma modular, separando claramente as responsabilidades de cada etapa da compilação. Isto foi importante para manter o projeto legível e para permitir testes unitários por etapa.
+
+NOTA: NAO SEI SE QUEREM UM DIAGRAMAZINHO OU NAO AQUI
+
+\subsection{Pré-processamento}
+
+A decisão de introduzir uma fase de pré-processamento responsável por normalizar o código teve dois objetivos principais.
+
+O primeiro foi simplificar significativamente o lexer implementado com \texttt{ply.lex}, evitando regras excessivamente dependentes da posição dos caracteres na linha.
+
+O segundo, foi permitir o suporte simultâneo aos formatos \textit{fixed-form} e \textit{free-form}. No formato fixo, remove comentários de linha, extrai labels, trata continuações e conserva o código relevante. No formato livre, remove comentários iniciados por \texttt{!} fora de strings e junta linhas continuadas com \texttt{\&}. Desta forma, o lexer torna-se praticamente independente do formato original do ficheiro, permitindo reutilizar a mesma tokenização tanto para programas Fortran 77 clássicos como para exemplos em formato moderno. O formato pode ser escolhido por linha de comandos ou configurado globalmente no compilador.
+
+\subsection{Análise Léxica}
+
+A análise léxica é implementada com \texttt{ply.lex}. O lexer recebe o código normalizado pelo pré-processador e converte-o numa sequência de tokens. São reconhecidas palavras-chave, identificadores, labels, literais inteiros, reais, lógicos e strings, operadores aritméticos, operadores relacionais e lógicos, delimitadores e símbolos especiais.
+
+Outra decisão importante foi manter as palavras reservadas centralizadas na configuração do compilador. Isto facilita a extensão da linguagem reconhecida e evita duplicação entre módulos. Esta fase também produz erros estruturados quando encontra sequências inválidas, permitindo distinguir problemas de tokenização de erros sintáticos ou semânticos.
+
+
+\subsection{Análise Sintática}
+
+A análise sintática foi implementada com \texttt{ply.yacc}, de acordo com o enunciado. O parser constrói uma AST, que guarda a estrutura relevante do programa, sendo a gramática o que define as combinações válidas de tokens e permite construir essa representação estruturada do programa. Isto é essencial porque as fases seguintes precisam de conhecer a organização lógica do código, e não apenas a sequência textual em que ele foi escrito.
+
+A análise sintática também permite rejeitar programas cuja forma não corresponde à linguagem esperada. A gramática usada pelo compilador é apresentada na secção NOTA: REFERENCIAR AQUI A SECÇÃO.
+
+\subsection{Árvore Sintática Abstrata}
+
+A AST foi desenhada com nós próprios para as construções que o compilador precisa de tratar: programa, declarações, expressões binárias e unárias, identificadores, literais, atribuições, condicionais, ciclos, I/O, arrays e subprogramas. Esta modelação evita que a análise semântica e a geração de código tenham de interpretar listas de tokens ou regras do parser, preservando apenas a informação relevante sobre o significado estrutural do programa.
+
+Foi usado o padrão Visitor para que as operações sobre a árvore ficassem separadas da definição dos nós. Assim, a mesma AST é percorrida pelo analisador semântico e pelo gerador de IR sem que os nós conheçam os detalhes dessas fases. Adicionalmente, novas análises ou novas formas de geração de código poderiam percorrer a mesma árvore sem alterar a forma como o programa é inicialmente reconhecido. Esta decisão ajudou a manter o código modular e tornou o compilador mais extensível, facilitando a adição de novas operações sobre a árvore.
+
+\subsection{Análise Semântica}
+
+A análise semântica foi separada do parser para manter clara a diferença entre forma válida e significado válido. O parser aceita estruturas gramaticais e o analisador semântico decide se essas estruturas fazem sentido no contexto do programa, verificando propriedades que não podem ser garantidas apenas pela gramática. 
+
+Nesta fase são verificadas declarações de variáveis, repetição de nomes no mesmo \textit{scope}, compatibilidade de tipos, uso de expressões lógicas em condições, coerência de labels em instruções \texttt{GOTO} e ciclos \texttt{DO}, acessos a arrays e chamadas de funções ou subrotinas. Para suportar estas validações, foi usada uma tabela de símbolos. Esta estrutura guarda informação sobre identificadores, tipos, dimensões, labels e subprogramas. A existência de scopes permite distinguir nomes definidos no programa principal de nomes definidos dentro de funções ou subrotinas.
+
+O suporte a \texttt{FUNCTION} e \texttt{SUBROUTINE} influenciou esta fase. As assinaturas dos subprogramas são registadas antes de analisar os seus corpos, permitindo chamadas a funções definidas depois do programa principal, um padrão comum nos exemplos Fortran. Esta decisão tornou a semântica mais compatível com o estilo esperado da linguagem.
+
+Esta etapa é fundamental para a correção do compilador, pois impede a geração de código para programas que, embora tenham uma forma sintática válida, não têm significado coerente segundo as regras da linguagem.
+
+
+\subsection{Representação Intermédia}
+
+Depois da análise semântica, a AST é traduzida para uma representação intermédia. Esta representação foi baseada em código de três endereços, uma forma linear e simplificada de representar operações do programa.
+
+A principal razão para introduzir esta etapa foi evitar gerar código da máquina virtual diretamente a partir da AST. Embora essa abordagem fosse suficiente para uma solução mínima, tornaria mais difícil aplicar otimizações e depurar a tradução. Com uma representação intermédia, o programa passa por uma fase intermédia mais simples de analisar, transformar e converter para código final.
+
+O código de três endereços decompõe expressões complexas em operações elementares, usando temporários para guardar resultados intermédios. Isto facilita a tradução de expressões, ciclos, condições, saltos e chamadas, que passam a ser representados por labels e instruções lineares. Também torna a geração de código EWVM menos dependente da estrutura original da árvore sintática.
+
+Esta decisão de existência de TAC cria ainda uma base adequada para a etapa de otimização.
+
+\subsection{Otimização}
+
+NOTA: EXPLICAR MELHOR CADA UMA DAS OTIMIZAÇOES - LISTAGEM
+
+A fase de otimização é opcional e atua sobre a representação intermédia. Foi colocada depois da geração de TAC porque nessa altura o programa já está numa forma uniforme, independente da sintaxe original, mas ainda não está preso às instruções concretas da EWVM, permitindo trabalhar sobre uma forma mais simples do programa.
+
+As otimizações implementadas procuram reduzir redundâncias e melhorar a eficiência do código gerado, sem alterar o comportamento observável do programa. Entre as transformações consideradas estão a avaliação de expressões constantes, a propagação de constantes, a simplificação de expressões algébricas, a eliminação de subexpressões repetidas, a remoção de código morto e a simplificação de saltos. 
+
+A decisão foi manter a otimização conservadora. Instruções com efeitos visíveis, como leituras, escritas, chamadas de subprogramas e saltos, não são removidas ou alteradas de forma agressiva. Esta escolha privilegia a correção do programa,  que é mais importante do que aplicar transformações arriscadas sem uma análise global mais profunda, garantindo que a melhoria de eficiência não compromete o resultado final.
+
+\subsection{Geração de Código EWVM}
+
+A última fase traduz a representação intermédia para código executável da EWVM, ou seja, as operações abstratas da representação intermédia são convertidas em instruções concretas da máquina virtual.
+
+A geração de código tem de lidar com diferentes aspetos do programa, como armazenamento de variáveis, cálculo de expressões, leitura e escrita de valores, controlo de fluxo, acesso a arrays e chamadas de subprogramas. A existência da representação intermédia simplifica esta fase, porque o código já se encontra numa forma linear e próxima de instruções elementares. É mantido um mapeamento entre nomes simbólicos e posições de memória global, e cada operação TAC é convertida para uma sequência de instruções da máquina virtual.
+
+O resultado final é um ficheiro com código VM, que pode ser executado ou inspecionado para validação manual da tradução. 
+
+\section{Gramática}
+
+Esta secção apresenta a gramática principal reconhecida pelo compilador. 
+
+NOTA: NAO SEI EM QUE FORMATO METEMOS ISTO
+
+\section{Funcionalidades Suportadas}
+
+NOTA: MELHORAR ESTE TOPICO
+
+O compilador suporta as construções essenciais pedidas no enunciado: declarações de variáveis, expressões aritméticas, relacionais e lógicas, instruções condicionais, ciclos \texttt{DO}, labels, \texttt{GOTO}, \texttt{READ} e \texttt{PRINT}. Também suporta \texttt{WRITE}, arrays, funções, subrotinas e otimizações sobre a representação intermédia.
+
+ A análise semântica valida se o identificador é efetivamente um array e se o número de índices é coerente. Na geração de código, os acessos são traduzidos através de cálculo de endereços e operações de carga ou armazenamento. A geração está mais consolidada para arrays unidimensionais, que cobrem os exemplos principais; arrays multidimensionais são reconhecidos em partes da gramática e permanecem uma limitação.
+
+O suporte a subprogramas foi integrado nas fases certas: o parser reconhece \texttt{FUNCTION}, \texttt{SUBROUTINE}, \texttt{CALL} e \texttt{RETURN}; a semântica cria scopes próprios e regista assinaturas; a IR representa chamadas e parâmetros; e o backend gera as instruções de chamada correspondentes na EWVM.
+
+
+\section{Testes e Validação}
+
+A validação foi organizada por fase para que uma falha indique com clareza onde está o problema. Existem testes para o lexer, parser, análise semântica, geração de IR, geração de VM, otimizador e testes end-to-end sobre programas Fortran.
+
+Os exemplos de teste incluem os programas padrão do enunciado e alguns casos adicionais. Também existem versões em formato \textit{free-form}, usadas para validar a decisão de suportar os dois formatos de entrada.
+
+Os testes end-to-end compilam programas reais, verificam se o código VM contém instruções essenciais como \texttt{start} e \texttt{stop}, e exportam ficheiros \texttt{.vm} para validação manual.
+
+Para além de correr os testes com \texttt{pytest}, o projeto suporta execução com cobertura através de \texttt{pytest-cov}. Isto permite medir que partes do código são exercitadas pelos testes e ajuda a justificar a robustez da solução durante a defesa.
+
+\section{Documentação Técnica}
+
+Além do relatório, o projeto inclui documentação de apoio, incluindo ficheiros sobre arquitetura, gramática, decisões de design, estrutura do projeto, documentação básica de Fortran e documentação da EWVM.
+
+O código inclui docstrings Python nas classes e funções principais, permitindo documentar responsabilidades, parâmetros, valores devolvidos e erros esperados. Esta opção torna o código mais fácil de compreender e permite gerar a documentação técnica com ferramentas Python.
+
+A documentação em \texttt{README.md} explica de forma detalhada como instalar dependências, correr o compilador, ativar otimizações, escolher o formato de entrada, executar testes e gerar documentação, funcionando como guia rápido para utilizar o compilador.
+
+\section{Execução}
+
+NOTA: MELHORAR ISTO 
+
+Para preparar o ambiente deve executar-se \texttt{make setup} e ativar o ambiente virtual com \texttt{source venv/bin/activate}. 
+
+Um programa em formato fixo pode ser compilado com \texttt{python -m src.main tests/examples/exemplo1\_hello.f}. Para ativar otimizações usa-se \texttt{--optimize}. Para formato livre usa-se \texttt{--format free}, por exemplo com um ficheiro em \texttt{tests/examples/free/}.
+
+Também é possível alterar o formato por omissão em \texttt{src/config.py}, mudando a opção global de \texttt{fixed} para \texttt{free}. Esta configuração é útil quando se pretende compilar vários ficheiros do mesmo formato sem repetir a opção na linha de comandos.
+
+O \texttt{Makefile} inclui atalhos para as operações mais comuns: \texttt{make compile}, \texttt{make compile-opt}, \texttt{make compile-free}, \texttt{make compile-free-opt} e \texttt{make test-all}. Também existem alvos por fase, como \texttt{make test-lexer}, \texttt{make test-parser}, \texttt{make test-semantic}, \texttt{make test-ir\_codegen}, \texttt{make test-vm\_codegen}, \texttt{make test-optimizer} e \texttt{make test-compiler}.
+
+
+\section{Dificuldades Encontradas}
+
+Uma das dificuldades principais foi o formato fixo de Fortran 77. Como o significado de uma linha depende da posição dos caracteres, implementar tudo diretamente no lexer tornaria as regras de \texttt{ply.lex} demasiado complexas. A solução foi criar um pré-processador responsável por labels, comentários e linhas de continuação. Esta decisão simplificou o lexer e permitiu suportar também o formato livre.
+
+
+Outra dificuldade foi a distinção entre chamada de função e acesso a array. Em Fortran, uma construção como \texttt{F(X)} pode representar uma chamada à função \texttt{F} ou um acesso ao array \texttt{F}. Esta ambiguidade não pode ser resolvida apenas pela sintaxe. A solução passou por construir uma representação inicial e usar informação semântica sobre declarações e subprogramas para interpretar corretamente cada caso.
+
+
+A validação de labels também exigiu cuidado. O enunciado refere explicitamente a coerência entre labels dos ciclos \texttt{DO} e comandos \texttt{CONTINUE}. Para isso, o analisador semântico regista labels definidos, labels usados por \texttt{GOTO} e labels associados a ciclos, detetando referências inexistentes ou inconsistências.
+
+
+A geração de código para arrays e subprogramas foi outra fonte de complexidade. Arrays exigem cálculo de endereços e distinção entre o valor da variável e a posição de memória onde ela está guardada. Subprogramas exigem \textit{scopes}, parâmetros, chamadas e retorno, o que afeta tanto a semântica como a IR e a geração de VM.
+
+Finalmente, a otimização teve de ser implementada de forma conservadora. Certas instruções não podem ser removidas ou reordenadas sem uma análise de efeitos mais completa. Por isso, os passes implementados privilegiam segurança e previsibilidade em vez de transformações agressivas.
+
+\section{Conclusão}
+
+NOTA: MELHORAR CONCLUSAO? TRABALHO FUTURO IG
+
+O compilador desenvolvido cumpre as fases principais propostas no enunciado: análise léxica com \texttt{ply.lex}, análise sintática com \texttt{ply.yacc}, análise semântica, tradução para representação intermédia e geração de código para a EWVM. A arquitetura modular permitiu separar responsabilidades e testar cada fase de forma independente.
+
+Para além do mínimo exigido, o projeto inclui suporte a formato fixo e livre, subprogramas, representação intermédia em TAC, pipeline de otimizações, documentação técnica, docstrings Python, testes automatizados e medição de cobertura. Estas escolhas tornam o compilador mais robusto, mais fácil de defender e preparado para futuras extensões, como suporte mais completo a arrays multidimensionais, formatação de I/O e funções intrínsecas adicionais.
+
+
+\begin{thebibliography}{9}
+
+\bibitem{ewvm}
+EWVM, \emph{Máquina Virtual usada na unidade curricular}, \url{https://ewvm.epl.di.uminho.pt/}.
+\end{thebibliography}
+
+
+\end{document}
+

@@ -40,6 +40,20 @@ class TestOptimizationPasses(unittest.TestCase):
         self.assertEqual(optimized[0].opcode, IROpcode.ASSIGN)
         self.assertEqual(optimized[0].arg1, 1)
 
+    def test_constant_folding_intrinsics(self):
+        instructions = [
+            IRInstruction(IROpcode.ABS, result="a", arg1=-5),
+            IRInstruction(IROpcode.MAX, result="m", arg1=3, arg2=7),
+            IRInstruction(IROpcode.SQRT, result="s", arg1=9),
+        ]
+
+        optimized = ConstantFolding.apply(instructions)
+
+        self.assertEqual([instr.opcode for instr in optimized], [IROpcode.ASSIGN] * 3)
+        self.assertEqual(optimized[0].arg1, 5)
+        self.assertEqual(optimized[1].arg1, 7)
+        self.assertEqual(optimized[2].arg1, 3)
+
     def test_constant_folding_skips_division_by_zero(self):
         instructions = [IRInstruction(IROpcode.DIV, result="t1", arg1=10, arg2=0)]
 
@@ -253,6 +267,21 @@ class TestIROptimizer(unittest.TestCase):
 
         self.assertIn("Otimizações aplicadas:", report)
         self.assertNotIn("aplicadas: 0", report)
+
+    def test_get_report_includes_diagnostics_and_reduction(self):
+        ir_program = IRProgram(name="P")
+        ir_program.instructions = [
+            IRInstruction(IROpcode.ADD, result="_t1", arg1=1, arg2=2),
+            IRInstruction(IROpcode.ASSIGN, result="x", arg1="_t1"),
+            IRInstruction(IROpcode.WRITE, arg1="x"),
+        ]
+
+        self.optimizer.optimize(ir_program)
+        report = self.optimizer.get_report()
+
+        self.assertIn("Optimization Report", report)
+        self.assertIn("Pass 1: constant_folding", report)
+        self.assertIn("Reduction:", report)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,13 @@ class ASTNode(ABC):
         pass
 
 
+@dataclass
+class SourceLocation:
+    """Localização aproximada de um nó no código fonte."""
+    line: int
+    column: int = 0
+
+
 # === Nós de Declaração ===
 
 @dataclass
@@ -201,6 +208,17 @@ class ContinueStatement(ASTNode):
             return visitor.visit_continue_statement(self)
         return None
 
+
+@dataclass
+class FormatStatement(ASTNode):
+    """Representa um FORMAT rotulado. A formatação é aceite e ignorada no backend atual."""
+    spec: Any = None
+
+    def accept(self, visitor):
+        if hasattr(visitor, 'visit_format_statement'):
+            return visitor.visit_format_statement(self)
+        return None
+
 @dataclass
 class FunctionCall(ASTNode):
     """Representa uma chamada de função dentro de uma expressão (ex: MOD(X,Y))."""
@@ -221,4 +239,3 @@ class ArrayAccess(Identifier):
         if hasattr(visitor, 'visit_array_access'):
             return visitor.visit_array_access(self)
         return None
-

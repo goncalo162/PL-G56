@@ -24,6 +24,19 @@ class IROpcode(Enum):
     DIV = "div"
     POW = "pow"
     MOD = "mod"
+    CONCAT = "concat"
+
+    ABS = "abs"
+    MAX = "max"
+    MIN = "min"
+    INT = "int"
+    REAL = "real"
+    SQRT = "sqrt"
+    SIN = "sin"
+    COS = "cos"
+    EXP = "exp"
+    LOG = "log"
+    NINT = "nint"
 
     AND = "and"
     OR = "or"
@@ -84,14 +97,25 @@ class IRInstruction:
         """
         if self.opcode in {
             IROpcode.ADD, IROpcode.SUB, IROpcode.MUL, IROpcode.DIV,
-            IROpcode.POW, IROpcode.MOD, IROpcode.AND, IROpcode.OR,
+            IROpcode.POW, IROpcode.MOD, IROpcode.CONCAT, IROpcode.MAX, IROpcode.MIN,
+            IROpcode.AND, IROpcode.OR,
             IROpcode.LT, IROpcode.LE, IROpcode.GT, IROpcode.GE,
             IROpcode.EQ, IROpcode.NE,
         }:
             return f"    {self.result} = {self.arg1} {self.opcode.value} {self.arg2}"
 
-        if self.opcode in {IROpcode.UMINUS, IROpcode.NOT}:
-            operator = "-" if self.opcode == IROpcode.UMINUS else "!"
+        if self.opcode in {
+            IROpcode.UMINUS, IROpcode.NOT, IROpcode.ABS, IROpcode.INT,
+            IROpcode.REAL, IROpcode.SQRT, IROpcode.SIN, IROpcode.COS,
+            IROpcode.EXP, IROpcode.LOG, IROpcode.NINT,
+        }:
+            operator_map = {
+                IROpcode.UMINUS: "-", IROpcode.NOT: "!",
+                IROpcode.ABS: "abs", IROpcode.INT: "int", IROpcode.REAL: "real",
+                IROpcode.SQRT: "sqrt", IROpcode.SIN: "sin", IROpcode.COS: "cos",
+                IROpcode.EXP: "exp", IROpcode.LOG: "log", IROpcode.NINT: "nint",
+            }
+            operator = operator_map[self.opcode]
             return f"    {self.result} = {operator}{self.arg1}"
 
         if self.opcode == IROpcode.ASSIGN:

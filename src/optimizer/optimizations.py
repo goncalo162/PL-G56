@@ -7,6 +7,7 @@ Implementações específicas de passes de otimização.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.codegen.ir import IRInstruction, IROpcode
@@ -131,11 +132,16 @@ class ConstantFolding:
         new_instructions = []
         binary_ops = {
             IROpcode.ADD, IROpcode.SUB, IROpcode.MUL, IROpcode.DIV,
-            IROpcode.MOD, IROpcode.POW, IROpcode.LT, IROpcode.LE,
+            IROpcode.MOD, IROpcode.POW, IROpcode.MAX, IROpcode.MIN,
+            IROpcode.LT, IROpcode.LE,
             IROpcode.GT, IROpcode.GE, IROpcode.EQ, IROpcode.NE,
             IROpcode.AND, IROpcode.OR,
         }
-        unary_ops = {IROpcode.UMINUS, IROpcode.NOT}
+        unary_ops = {
+            IROpcode.UMINUS, IROpcode.NOT, IROpcode.ABS, IROpcode.INT,
+            IROpcode.REAL, IROpcode.SQRT, IROpcode.SIN, IROpcode.COS,
+            IROpcode.EXP, IROpcode.LOG, IROpcode.NINT,
+        }
 
         for instr in instructions:
             if instr.result is None:
@@ -163,6 +169,10 @@ class ConstantFolding:
                             folded = left % right
                         elif instr.opcode == IROpcode.POW:
                             folded = left ** right
+                        elif instr.opcode == IROpcode.MAX:
+                            folded = max(left, right)
+                        elif instr.opcode == IROpcode.MIN:
+                            folded = min(left, right)
                         elif instr.opcode == IROpcode.LT:
                             folded = int(left < right)
                         elif instr.opcode == IROpcode.LE:
@@ -184,20 +194,39 @@ class ConstantFolding:
                             IRInstruction(opcode=IROpcode.ASSIGN, result=instr.result, arg1=folded)
                         )
                         continue
-                    except (ZeroDivisionError, OverflowError):
+                    except (ZeroDivisionError, OverflowError, ValueError):
                         pass
 
             if instr.opcode in unary_ops:
                 operand = _to_number(instr.arg1)
                 if operand is not None:
-                    if instr.opcode == IROpcode.UMINUS:
-                        folded = -operand
-                    else:
-                        folded = int(not bool(operand))
-                    new_instructions.append(
-                        IRInstruction(opcode=IROpcode.ASSIGN, result=instr.result, arg1=folded)
-                    )
-                    continue
+                    try:
+                        if instr.opcode == IROpcode.UMINUS:
+                            folded = -operand
+                        elif instr.opcode == IROpcode.NOT:
+                            folded = int(not bool(operand))
+                        elif instr.opcode == IROpcode.ABS:
+                            folded = abs(operand)
+                        elif instr.opcode in {IROpcode.INT, IROpcode.NINT}:
+                            folded = int(operand)
+                        elif instr.opcode == IROpcode.REAL:
+                            folded = float(operand)
+                        elif instr.opcode == IROpcode.SQRT:
+                            folded = math.sqrt(operand)
+                        elif instr.opcode == IROpcode.SIN:
+                            folded = math.sin(operand)
+                        elif instr.opcode == IROpcode.COS:
+                            folded = math.cos(operand)
+                        elif instr.opcode == IROpcode.EXP:
+                            folded = math.exp(operand)
+                        else:
+                            folded = math.log(operand)
+                        new_instructions.append(
+                            IRInstruction(opcode=IROpcode.ASSIGN, result=instr.result, arg1=folded)
+                        )
+                        continue
+                    except (OverflowError, ValueError):
+                        pass
 
             new_instructions.append(instr)
 
@@ -328,7 +357,8 @@ class CommonSubexpressionElimination:
         """
         pure_binary = {
             IROpcode.ADD, IROpcode.SUB, IROpcode.MUL, IROpcode.DIV, IROpcode.MOD,
-            IROpcode.POW, IROpcode.LT, IROpcode.LE, IROpcode.GT, IROpcode.GE,
+            IROpcode.POW, IROpcode.MAX, IROpcode.MIN,
+            IROpcode.LT, IROpcode.LE, IROpcode.GT, IROpcode.GE,
             IROpcode.EQ, IROpcode.NE, IROpcode.AND, IROpcode.OR,
         }
 

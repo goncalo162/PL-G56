@@ -19,6 +19,7 @@ class SymbolInfo:
     dimensions: Optional[list] = None  # Para arrays: [(1, 10), (1, 5)]
     initial_value: Optional[Any] = None # Valor inicial para variáveis
     is_parameter: bool = False # Se é um parâmetro de função/subrotina
+    is_constant: bool = False # Se é uma constante PARAMETER de Fortran
     is_function: bool = False # Se é uma função (para diferenciar de variáveis comuns)
     return_type: Optional[str] = None # Tipo de retorno para funções
     parameters: Optional[list] = None  # Para funções

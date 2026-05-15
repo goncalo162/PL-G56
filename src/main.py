@@ -73,7 +73,7 @@ class FortranCompiler:
             if self.enable_optimizations:
                 logger.info("Fase 5: Otimização de Código (!valorização!)")
                 ir_program = self.optimizer.optimize(ir_program)
-                logger.info(f"Otimizações aplicadas: {', '.join(self.optimizer.optimizations_applied)}")
+                logger.info("\n%s", self.optimizer.get_report())
 
             logger.info("Fase 6: Geração de Código VM")
             vm_code = self.vm_codegen.generate_vm_code(ir_program)

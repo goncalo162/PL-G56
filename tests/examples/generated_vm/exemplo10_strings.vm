@@ -1,0 +1,16 @@
+start
+// enter scope
+pushs "Alice"
+storeg 0
+pushs "Bem-vindo ao programa com strings"
+storeg 1
+pushi 25
+storeg 2
+pushg 0
+writes
+pushg 1
+writes
+pushi 25
+writei
+// leave scope
+stop

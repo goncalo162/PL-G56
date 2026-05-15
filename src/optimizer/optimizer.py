@@ -7,6 +7,7 @@ Implementa passes de otimização sobre a IR.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable, List, Tuple
 
 from src.codegen.ir import IRInstruction, IRProgram
@@ -20,6 +21,19 @@ from src.optimizer.optimizations import (
     LocalTempForwarding,
     LoopUnrolling,
 )
+
+
+@dataclass
+class OptimizationDiagnostic:
+    """Resumo de uma transformação de otimização."""
+    pass_name: str
+    before_count: int
+    after_count: int
+    changed: bool
+
+    @property
+    def removed_count(self) -> int:
+        return max(0, self.before_count - self.after_count)
 
 
 class IROptimizer:
@@ -39,6 +53,9 @@ class IROptimizer:
 
     def __init__(self):
         self.optimizations_applied = []
+        self.diagnostics: List[OptimizationDiagnostic] = []
+        self.initial_instruction_count = 0
+        self.final_instruction_count = 0
         self._pipeline: List[Tuple[str, Callable[[list], list]]] = [
             ("constant_folding", ConstantFolding.apply),
             ("constant_propagation", ConstantPropagation.apply),
@@ -62,16 +79,26 @@ class IROptimizer:
             IRProgram otimizado
         """
         self.optimizations_applied = []
+        self.diagnostics = []
         instructions = list(ir_program.instructions)
+        self.initial_instruction_count = len(instructions)
         for pass_name, pass_fn in self._pipeline:
             before = self._instruction_signature(instructions)
+            before_count = len(instructions)
             instructions = pass_fn(instructions)
             after = self._instruction_signature(instructions)
+            after_count = len(instructions)
+            changed = before != after
 
-            if before != after:
+            self.diagnostics.append(
+                OptimizationDiagnostic(pass_name, before_count, after_count, changed)
+            )
+
+            if changed:
                 self.optimizations_applied.append(pass_name)
 
         ir_program.instructions = instructions
+        self.final_instruction_count = len(instructions)
         return ir_program
 
     @staticmethod
@@ -84,10 +111,32 @@ class IROptimizer:
 
     def get_report(self) -> str:
         """Retorna relatório de otimizações aplicadas."""
-        total = len(self.optimizations_applied)
-        if total == 0:
+        if not self.optimizations_applied:
             return "Otimizações aplicadas: 0 (nenhuma alteração)"
-        return (
-            f"Otimizações aplicadas: {total} "
-            f"({', '.join(self.optimizations_applied)})"
+
+        lines = [
+            f"Otimizações aplicadas: {len(self.optimizations_applied)} "
+            f"({', '.join(self.optimizations_applied)})",
+            "",
+            "Optimization Report",
+            "===================",
+        ]
+        for index, diagnostic in enumerate(self.diagnostics, start=1):
+            status = "alterado" if diagnostic.changed else "sem alterações"
+            lines.append(f"Pass {index}: {diagnostic.pass_name} - {status}")
+            if diagnostic.changed:
+                lines.append(
+                    f"  - Instruções: {diagnostic.before_count} -> {diagnostic.after_count}"
+                )
+                if diagnostic.removed_count:
+                    lines.append(f"  - Removidas: {diagnostic.removed_count}")
+
+        reduction = self.initial_instruction_count - self.final_instruction_count
+        percent = 0
+        if self.initial_instruction_count:
+            percent = round((reduction / self.initial_instruction_count) * 100)
+        lines.append(
+            f"Reduction: {self.initial_instruction_count} instruções -> "
+            f"{self.final_instruction_count} instruções ({percent}% ganho)"
         )
+        return "\n".join(lines)

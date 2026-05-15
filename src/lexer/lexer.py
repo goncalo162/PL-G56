@@ -43,6 +43,7 @@ class Lexer:
 
     # Regras Regex simples para operadores aritméticos e delimitadores
     t_POWER    = r'\*\*'
+    t_CONCAT   = r'//'
     t_PLUS     = r'\+'
     t_MINUS    = r'-'
     t_MULTIPLY = r'\*'

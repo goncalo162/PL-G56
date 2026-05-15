@@ -239,6 +239,7 @@ PRECEDENCE = (
     ('left', 'NOT'), # .NOT. tem menor precedência que os relacionais
     ('left', 'LT', 'LE', 'GT', 'GE', 'EQ', 'NE'), # .LT., .LE., .GT., .GE., .EQ., .NE. têm menor precedência que adição/subtração
     ('left', 'PLUS', 'MINUS'), # + e - têm menor precedência que multiplicação/divisão
+    ('left', 'CONCAT'), # // concatena strings
     ('left', 'MULTIPLY', 'DIVIDE'), # * e / têm menor precedência que potência
     ('right', 'UMINUS', 'UNOT'), # Operadores unários (negativo e .NOT.) têm maior precedência que os binários, mas menor que ** (potência)
     ('right', 'POWER'), # ** tem maior precedência que unários
