@@ -66,7 +66,13 @@ class CodeGenerator(ASTVisitor):
     def visit_variable_declaration(self, node: nodes.VariableDeclaration):
         # A declaração é gerida pela tabela de símbolos na análise semântica.
         # Aqui apenas registamos metadados e, se existir, a inicialização.
-        self.ir_program.variables[node.name] = {'type': node.type_name, 'dims': node.dimensions}
+        if node.type_name == "DIMENSION" and node.name in self.ir_program.variables:
+            self.ir_program.variables[node.name]["dims"] = node.dimensions
+            return
+        self.ir_program.variables[node.name] = {
+            'type': "INTEGER" if node.type_name == "DIMENSION" else node.type_name,
+            'dims': node.dimensions
+        }
         if node.initial_value:
             val = node.initial_value.accept(self)
             self.ir_program.emit_assign(node.name, val)
@@ -76,8 +82,7 @@ class CodeGenerator(ASTVisitor):
         value_reg = node.value.accept(self)
         
         if isinstance(node.target, nodes.ArrayAccess):
-            # A implementação actual trata apenas arrays 1D.
-            index_reg = node.target.indices[0].accept(self)
+            index_reg = self._linearize_array_index(node.target.name, node.target.indices)
             self.ir_program.emit_array_store(node.target.name, index_reg, value_reg)
         else:
             self.ir_program.emit_assign(node.target.name, value_reg)
@@ -93,7 +98,8 @@ class CodeGenerator(ASTVisitor):
             '+': IROpcode.ADD, '-': IROpcode.SUB, '*': IROpcode.MUL, '/': IROpcode.DIV,
             '**': IROpcode.POW, '.EQ.': IROpcode.EQ, '.NE.': IROpcode.NE,
             '.LT.': IROpcode.LT, '.LE.': IROpcode.LE, '.GT.': IROpcode.GT,
-            '.GE.': IROpcode.GE, '.AND.': IROpcode.AND, '.OR.': IROpcode.OR
+            '.GE.': IROpcode.GE, '.AND.': IROpcode.AND, '.OR.': IROpcode.OR,
+            '//': IROpcode.CONCAT,
         }
         
         ir_opcode = op_map.get(node.operator.upper())
@@ -192,7 +198,7 @@ class CodeGenerator(ASTVisitor):
                 self.ir_program.variables[temp_reg] = {"type": element_type}
 
                 self.ir_program.emit_read(temp_reg)
-                index_reg = var.indices[0].accept(self)
+                index_reg = self._linearize_array_index(var.name, var.indices)
                 self.ir_program.emit_array_store(var.name, index_reg, temp_reg)
             else:
                 self.ir_program.emit_read(var.name)
@@ -225,11 +231,27 @@ class CodeGenerator(ASTVisitor):
         # O parser pode representar argumentos como lista ou nó único.
         args = node.arguments if isinstance(node.arguments, list) else [node.arguments]
 
-        if node.function_name == "MOD" and len(args) == 2:
-            left = args[0].accept(self)
-            right = args[1].accept(self)
+        intrinsic = node.function_name.upper()
+        intrinsic_binary = {"MOD": IROpcode.MOD, "MAX": IROpcode.MAX, "MIN": IROpcode.MIN}
+        intrinsic_unary = {
+            "ABS": IROpcode.ABS, "INT": IROpcode.INT, "REAL": IROpcode.REAL,
+            "SQRT": IROpcode.SQRT, "SIN": IROpcode.SIN, "COS": IROpcode.COS,
+            "EXP": IROpcode.EXP, "LOG": IROpcode.LOG, "NINT": IROpcode.NINT,
+        }
+
+        if intrinsic in intrinsic_binary and len(args) >= 2:
+            current = args[0].accept(self)
+            for arg in args[1:]:
+                right = arg.accept(self)
+                temp_reg = self.new_temp()
+                self.ir_program.emit_binop(intrinsic_binary[intrinsic], temp_reg, current, right)
+                current = temp_reg
+            return current
+
+        if intrinsic in intrinsic_unary and len(args) == 1:
+            operand = args[0].accept(self)
             temp_reg = self.new_temp()
-            self.ir_program.emit_binop(IROpcode.MOD, temp_reg, left, right)
+            self.ir_program.emit_unop(intrinsic_unary[intrinsic], temp_reg, operand)
             return temp_reg
 
         # Os argumentos são empilhados na ordem inversa para preservar a ordem.
@@ -252,11 +274,66 @@ class CodeGenerator(ASTVisitor):
         self.ir_program.emit_call(node.subroutine, len(args))
 
     def visit_array_access(self, node: nodes.ArrayAccess):
-        # A versão actual ainda trata acessos unidimensionais.
-        index_reg = node.indices[0].accept(self)
+        index_reg = self._linearize_array_index(node.name, node.indices)
         temp_reg = self.new_temp()
         self.ir_program.emit_array_load(temp_reg, node.name, index_reg)
         return temp_reg
+
+    def _literal_int(self, value):
+        """Extrai inteiro de dimensão literal, quando conhecido."""
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if hasattr(value, "value") and isinstance(getattr(value, "value"), int):
+            return getattr(value, "value")
+        return None
+
+    def _dimension_bounds(self, dimension):
+        """Normaliza uma dimensão para limites Fortran 1-based quando possível."""
+        if isinstance(dimension, tuple) and len(dimension) == 2:
+            lower = self._literal_int(dimension[0]) or 1
+            upper = self._literal_int(dimension[1]) or lower
+            return lower, upper
+        upper = self._literal_int(dimension) or 1
+        return 1, upper
+
+    def _linearize_array_index(self, array_name, indices):
+        """Converte índices multidimensionais Fortran em índice linear 1-based."""
+        if len(indices) == 1:
+            return indices[0].accept(self)
+
+        dims = self.ir_program.variables.get(array_name, {}).get("dims") or []
+        if len(dims) != len(indices):
+            return indices[0].accept(self)
+
+        offset = None
+        stride = 1
+        for idx_node, dimension in zip(indices, dims):
+            lower, upper = self._dimension_bounds(dimension)
+            idx_val = idx_node.accept(self)
+            adjusted = idx_val
+            if lower != 0:
+                adjusted_temp = self.new_temp()
+                self.ir_program.emit_binop(IROpcode.SUB, adjusted_temp, idx_val, lower)
+                adjusted = adjusted_temp
+
+            term = adjusted
+            if stride != 1:
+                term_temp = self.new_temp()
+                self.ir_program.emit_binop(IROpcode.MUL, term_temp, adjusted, stride)
+                term = term_temp
+
+            if offset is None:
+                offset = term
+            else:
+                sum_temp = self.new_temp()
+                self.ir_program.emit_binop(IROpcode.ADD, sum_temp, offset, term)
+                offset = sum_temp
+
+            stride *= max(1, upper - lower + 1)
+
+        one_based = self.new_temp()
+        self.ir_program.emit_binop(IROpcode.ADD, one_based, offset, 1)
+        return one_based
         
     def visit_goto_statement(self, node: nodes.GotoStatement):
         self.ir_program.emit_goto(node.label)
@@ -266,3 +343,6 @@ class CodeGenerator(ASTVisitor):
         if not self.loop_stack:
             raise ValueError("CONTINUE fora de um ciclo DO")
         self.ir_program.emit_goto(self.loop_stack[-1])
+
+    def visit_format_statement(self, node):
+        return None

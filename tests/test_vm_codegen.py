@@ -122,6 +122,33 @@ class TestVMCodeGenerator(unittest.TestCase):
         self.assertIn("and", output)
         self.assertIn("or", output)
 
+    def test_string_concat_emits_concat_opcode(self):
+        ir_program = IRProgram(name="CONCAT")
+        ir_program.variables = {"A": {"type": "CHARACTER"}, "B": {"type": "CHARACTER"}, "C": {"type": "CHARACTER"}}
+        ir_program.emit_binop(IROpcode.CONCAT, "C", "A", "B")
+
+        output = self._generate(ir_program)
+
+        self.assertIn("concat", output)
+        self.assertIn("storeg 2", output)
+
+    def test_intrinsic_vm_generation(self):
+        ir_program = IRProgram(name="INTRINSICS")
+        ir_program.variables = {"X": {"type": "REAL"}, "Y": {"type": "REAL"}, "I": {"type": "INTEGER"}}
+        ir_program.emit_unop(IROpcode.SIN, "Y", "X")
+        ir_program.emit_unop(IROpcode.COS, "Y", "X")
+        ir_program.emit_unop(IROpcode.INT, "I", "X")
+        ir_program.emit_unop(IROpcode.ABS, "I", -3)
+        ir_program.emit_binop(IROpcode.MAX, "I", 1, 2)
+
+        output = self._generate(ir_program)
+
+        self.assertIn("fsin", output)
+        self.assertIn("fcos", output)
+        self.assertIn("ftoi", output)
+        self.assertIn("dup 1", output)
+        self.assertIn("__CHOOSE_LEFT", output)
+
     def test_float_binary_operation_uses_float_opcode(self):
         ir_program = IRProgram(name="FLOATBIN")
         ir_program.variables = {"A": {"type": "REAL"}, "B": {"type": "REAL"}, "C": {"type": "REAL"}}
@@ -273,6 +300,17 @@ class TestVMCodeGenerator(unittest.TestCase):
         self.assertGreaterEqual(output.count("padd"), 4)
         self.assertIn("load 0", output)
         self.assertIn("store 0", output)
+
+    def test_multidimensional_array_allocation_size(self):
+        ir_program = IRProgram(name="ARRAY2D")
+        ir_program.variables = {"M": {"type": "INTEGER", "dims": [(1, 3), (1, 4)]}}
+        ir_program.emit_assign("AFTER", 1)
+
+        output = self._generate(ir_program)
+
+        self.assertEqual(self.codegen.symbol_map["M"], 0)
+        self.assertEqual(self.codegen.symbol_map["AFTER"], 12)
+        self.assertIn("storeg 12", output)
 
     def test_scope_markers_are_documented_as_comments(self):
         ir_program = IRProgram(name="SCOPES")

@@ -263,6 +263,34 @@ class TestIRGenerator(unittest.TestCase):
         self.assertEqual(instr.arg2, "I")
         self.assertEqual(instr.result, "_t1")
 
+    def test_visit_intrinsic_calls_emit_dedicated_ir(self):
+        """Gera IR dedicado para intrínsecas além de MOD."""
+        max_node = nodes.FunctionCall(
+            function_name="MAX",
+            arguments=[nodes.Identifier(name="A"), nodes.Identifier(name="B"), nodes.Identifier(name="C")],
+        )
+        sqrt_node = nodes.FunctionCall(function_name="SQRT", arguments=[nodes.Identifier(name="X")])
+
+        max_result = self.codegen.visit_function_call(max_node)
+        sqrt_result = self.codegen.visit_function_call(sqrt_node)
+
+        self.assertEqual(max_result, "_t2")
+        self.assertEqual(sqrt_result, "_t3")
+        self.assertEqual([instr.opcode for instr in self.codegen.ir_program.instructions],
+                         [IROpcode.MAX, IROpcode.MAX, IROpcode.SQRT])
+
+    def test_visit_string_concatenation_emits_concat(self):
+        node = nodes.BinaryOp(
+            left=nodes.Identifier(name="A"),
+            operator="//",
+            right=nodes.Identifier(name="B"),
+        )
+
+        result = self.codegen.visit_binary_op(node)
+
+        self.assertEqual(result, "_t1")
+        self.assertEqual(self.codegen.ir_program.instructions[0].opcode, IROpcode.CONCAT)
+
     def test_visit_call_statement_emits_call_without_result(self):
         node = nodes.CallStatement(
             subroutine="SUBR",
@@ -285,6 +313,20 @@ class TestIRGenerator(unittest.TestCase):
         instr = self.codegen.ir_program.instructions[0]
         self.assertEqual(instr.opcode, IROpcode.LOAD_ARRAY)
         self.assertEqual(instr.result, "_t1")
+
+    def test_multidimensional_array_access_linearizes_index(self):
+        self.codegen.ir_program.variables = {"M": {"type": "INTEGER", "dims": [nodes.Literal(3, "INTEGER"), nodes.Literal(4, "INTEGER")]}}
+        node = nodes.ArrayAccess(
+            name="M",
+            indices=[nodes.Identifier(name="I"), nodes.Identifier(name="J")],
+        )
+
+        result = self.codegen.visit_array_access(node)
+
+        self.assertEqual(result, "_t6")
+        opcodes = [instr.opcode for instr in self.codegen.ir_program.instructions]
+        self.assertEqual(opcodes, [IROpcode.SUB, IROpcode.SUB, IROpcode.MUL, IROpcode.ADD, IROpcode.ADD, IROpcode.LOAD_ARRAY])
+        self.assertEqual(self.codegen.ir_program.instructions[-1].arg2, "_t5")
 
     def test_visit_program_wraps_main_scope(self):
         program = nodes.Program(

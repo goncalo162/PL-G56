@@ -76,8 +76,11 @@ class SemanticAnalyzer(ASTVisitor):
         """Retorna lista de erros encontrados."""
         return self.errors.copy()
     
-    def _add_error(self, message: str):
+    def _add_error(self, message: str, node: object = None):
         """Adiciona erro à lista."""
+        location = getattr(node, 'location', None)
+        if location and getattr(location, 'line', 0):
+            message = f"{message} (linha {location.line}, coluna {getattr(location, 'column', 0)})"
         self.errors.append(message)
 
     def _register_statement_label(self, stmt: object):
@@ -166,21 +169,34 @@ class SemanticAnalyzer(ASTVisitor):
         Se existir um valor inicial, valida se ele é compatível com o tipo
         declarado usando o TypeChecker.
         """
-        valid_types = ["INTEGER", "REAL", "LOGICAL", "CHARACTER", "COMPLEX"]
+        valid_types = ["INTEGER", "REAL", "LOGICAL", "CHARACTER", "COMPLEX", "DIMENSION"]
         if node.type_name not in valid_types:
-            self._add_error(f"Tipo desconhecido '{node.type_name}'")
+            self._add_error(f"Tipo desconhecido '{node.type_name}'", node)
+            return
+
+        if node.type_name == "DIMENSION":
+            existing = self.symbol_table.lookup_in_current(node.name)
+            if existing is not None:
+                existing.dimensions = getattr(node, 'dimensions', None)
+                return
+            try:
+                self.symbol_table.declare(node.name, "INTEGER", dimensions=getattr(node, 'dimensions', None))
+            except SemanticError as e:
+                self._add_error(str(e), node)
             return
         
         initial_value = getattr(node, 'initial_value', None)
         try:
-            self.symbol_table.declare(
+            symbol = self.symbol_table.declare(
                 node.name,
                 node.type_name,
                 dimensions=getattr(node, 'dimensions', None),
                 initial_value=initial_value
             )
+            if getattr(node, 'is_parameter', False):
+                symbol.is_constant = True
         except SemanticError as e:
-            self._add_error(str(e))
+            self._add_error(str(e), node)
             return
         
         if initial_value is not None:
@@ -191,7 +207,7 @@ class SemanticAnalyzer(ASTVisitor):
                 try:
                     self.type_checker.verify_assignment(value_type, node.type_name)
                 except SemanticError as e:
-                    self._add_error(str(e))
+                    self._add_error(str(e), node)
     
     # ====================================================================
     # Expressões
@@ -205,7 +221,7 @@ class SemanticAnalyzer(ASTVisitor):
         """
         symbol = self.symbol_table.lookup(node.name)
         if symbol is None:
-            self._add_error(f"Variável '{node.name}' não declarada")
+            self._add_error(f"Variável '{node.name}' não declarada", node)
             self._set_type(node, "UNKNOWN")
         else:
             self._set_type(node, symbol.type_name)
@@ -245,7 +261,7 @@ class SemanticAnalyzer(ASTVisitor):
             )
             self._set_type(node, result_type)
         except SemanticError as e:
-            self._add_error(str(e))
+            self._add_error(str(e), node)
             self._set_type(node, "UNKNOWN")
     
     def visit_unary_op(self, node):
@@ -260,12 +276,12 @@ class SemanticAnalyzer(ASTVisitor):
         if node.operator in ['+', '-']:
             if not self.type_checker.is_numeric(operand_type):
                 self._add_error(
-                    f"Operador '{node.operator}' requer tipo numérico"
+                    f"Operador '{node.operator}' requer tipo numérico", node
                 )
             self._set_type(node, operand_type)
         elif node.operator == '.NOT.':
             if not self.type_checker.is_logical(operand_type):
-                self._add_error(f"'.NOT.' requer tipo LOGICAL")
+                self._add_error(f"'.NOT.' requer tipo LOGICAL", node)
             self._set_type(node, "LOGICAL")
     
     def visit_function_call(self, node):
@@ -277,52 +293,71 @@ class SemanticAnalyzer(ASTVisitor):
             arg.accept(self)
             arg_types.append(self._get_type(arg) or "UNKNOWN")
 
-        builtin_returns = {
-            "MOD": arg_types[0] if arg_types else "UNKNOWN",
-            "ABS": arg_types[0] if arg_types else "UNKNOWN",
-            "SQRT": "REAL",
-            "SIN": "REAL",
-            "COS": "REAL",
-            "EXP": "REAL",
-            "LOG": "REAL",
-            "INT": "INTEGER",
-            "REAL": "REAL",
-            "NINT": "INTEGER",
-        }
         function_name = node.function_name.upper()
-        if function_name in builtin_returns:
-            self._set_type(node, builtin_returns[function_name])
+        if function_name in {"MOD", "ABS", "MAX", "MIN", "SQRT", "SIN", "COS", "EXP", "LOG", "INT", "REAL", "NINT"}:
+            self._validate_intrinsic_call(node, function_name, arg_types)
             return
 
         symbol = self.symbol_table.lookup(node.function_name)
         if symbol is None:
-            self._add_error(f"Função '{node.function_name}' não declarada")
+            self._add_error(f"Função '{node.function_name}' não declarada", node)
             self._set_type(node, "UNKNOWN")
             return
 
         if not symbol.is_function:
-            self._add_error(f"'{node.function_name}' não é uma função")
+            self._add_error(f"'{node.function_name}' não é uma função", node)
             self._set_type(node, "UNKNOWN")
             return
 
         self._set_type(node, symbol.return_type or symbol.type_name)
+
+    def _validate_intrinsic_call(self, node, function_name: str, arg_types: List[str]):
+        """Valida intrínsecas Fortran suportadas e anota o tipo de retorno."""
+        numeric = all(self.type_checker.is_numeric(arg_type) for arg_type in arg_types)
+        if function_name == "MOD":
+            if len(arg_types) != 2 or not numeric:
+                self._add_error("MOD requer dois argumentos numéricos", node)
+                self._set_type(node, "UNKNOWN")
+                return
+            self._set_type(node, "INTEGER" if all(t == "INTEGER" for t in arg_types) else "REAL")
+            return
+
+        if function_name in {"MAX", "MIN"}:
+            if len(arg_types) < 1 or not numeric:
+                self._add_error(f"{function_name} requer argumentos numéricos", node)
+                self._set_type(node, "UNKNOWN")
+                return
+            self._set_type(node, "REAL" if "REAL" in arg_types or "COMPLEX" in arg_types else "INTEGER")
+            return
+
+        if len(arg_types) != 1 or not numeric:
+            self._add_error(f"{function_name} requer um argumento numérico", node)
+            self._set_type(node, "UNKNOWN")
+            return
+
+        if function_name == "ABS":
+            self._set_type(node, arg_types[0])
+        elif function_name in {"INT", "NINT"}:
+            self._set_type(node, "INTEGER")
+        else:
+            self._set_type(node, "REAL")
     
     def visit_array_access(self, node):
         """Valida acesso a um array e suas dimensões."""
         symbol = self.symbol_table.lookup(node.name)
         if symbol is None:
-            self._add_error(f"Array '{node.name}' não declarado")
+            self._add_error(f"Array '{node.name}' não declarado", node)
             self._set_type(node, "UNKNOWN")
             return
         
         if not symbol.dimensions:
-            self._add_error(f"'{node.name}' não é um array")
+            self._add_error(f"'{node.name}' não é um array", node)
             self._set_type(node, "UNKNOWN")
             return
         
         if len(node.indices) != len(symbol.dimensions):
             self._add_error(
-                f"Número de índices incorreto para '{node.name}'"
+                f"Número de índices incorreto para '{node.name}'", node
             )
         
         for idx in node.indices:
@@ -344,7 +379,11 @@ class SemanticAnalyzer(ASTVisitor):
         
         symbol = self.symbol_table.lookup(node.target.name)
         if symbol is None:
-            self._add_error(f"Variável alvo '{node.target.name}' não declarada")
+            self._add_error(f"Variável alvo '{node.target.name}' não declarada", node)
+            return
+
+        if getattr(symbol, 'is_constant', False):
+            self._add_error(f"PARAMETER '{node.target.name}' não pode ser atribuído", node)
             return
         
         lvalue_type = symbol.type_name
@@ -352,7 +391,7 @@ class SemanticAnalyzer(ASTVisitor):
         try:
             self.type_checker.verify_assignment(rvalue_type, lvalue_type)
         except SemanticError as e:
-            self._add_error(str(e))
+            self._add_error(str(e), node)
     
     def visit_if_statement(self, node):
         """Valida uma instrução IF simples."""
@@ -360,7 +399,7 @@ class SemanticAnalyzer(ASTVisitor):
         cond_type = self._get_type(node.condition)
         
         if cond_type and not self.type_checker.is_logical(cond_type):
-            self._add_error(f"Condição IF deve ser LOGICAL")
+            self._add_error(f"Condição IF deve ser LOGICAL", node)
         
         if node.then_body:
             for stmt in node.then_body:
@@ -384,10 +423,10 @@ class SemanticAnalyzer(ASTVisitor):
         end_type = self._get_type(node.end)
         
         if start_type and not self.type_checker.is_numeric(start_type):
-            self._add_error("Valor inicial DO deve ser numérico")
+            self._add_error("Valor inicial DO deve ser numérico", node)
         
         if end_type and not self.type_checker.is_numeric(end_type):
-            self._add_error("Valor final DO deve ser numérico")
+            self._add_error("Valor final DO deve ser numérico", node)
         
         if node.body:
             for stmt in node.body:
@@ -408,7 +447,7 @@ class SemanticAnalyzer(ASTVisitor):
     def visit_continue_statement(self, node):
         """Valida CONTINUE: só deve existir dentro de um DO."""
         if not self.active_loops:
-            self._add_error("CONTINUE fora de DO loop")
+            self._add_error("CONTINUE fora de DO loop", node)
 
     def _validate_goto_labels(self):
         """Verifica se todos os labels referenciados por GOTO existem."""
@@ -422,7 +461,7 @@ class SemanticAnalyzer(ASTVisitor):
             for var in node.variables:
                 symbol = self.symbol_table.lookup(var.name)
                 if symbol is None:
-                    self._add_error(f"Variável '{var.name}' em READ não declarada")
+                    self._add_error(f"Variável '{var.name}' em READ não declarada", var)
                 var.accept(self)
     
     def visit_print_statement(self, node):
@@ -455,7 +494,7 @@ class SemanticAnalyzer(ASTVisitor):
                         is_parameter=True
                     )
                 except SemanticError as e:
-                    self._add_error(str(e))
+                    self._add_error(str(e), param)
         
         if node.body:
             for stmt in node.body:
@@ -465,3 +504,7 @@ class SemanticAnalyzer(ASTVisitor):
                 stmt.accept(self)
         
         self.symbol_table.pop_scope()
+
+    def visit_format_statement(self, node):
+        """FORMAT é validado sintaticamente e não produz efeito semântico."""
+        return None

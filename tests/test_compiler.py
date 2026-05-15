@@ -105,7 +105,30 @@ class TestCompilerExamplesE2E(unittest.TestCase):
         # Lista útil para evolução da cobertura sem partir toda a suite.
         self.assertIn("exemplo1_hello.f", compiled)
         self.assertIn("exemplo2_fatorial.f", compiled)
-        self.assertIn("exemplo10_strings.f", failed)
+        self.assertIn("exemplo10_strings.f", compiled)
+
+    def test_compile_critical_features(self):
+        source = """
+      PROGRAM CRIT
+      INTEGER A(3,3), I
+      PARAMETER (N = 3)
+      CHARACTER*20 S, T, U
+      REAL X, Y
+      A(2, 3) = MAX(N, 2)
+      X = SQRT(4.0)
+      Y = SIN(X) + COS(X)
+      U = S // T
+      WRITE(*, 100) A(2, 3)
+ 100  FORMAT(I5)
+      END
+        """
+        compiler = FortranCompiler(enable_optimizations=False)
+        vm_code = compiler.compile(source)
+
+        self.assertIsNotNone(vm_code)
+        self.assertIn("concat", vm_code)
+        self.assertIn("fsin", vm_code)
+        self.assertIn("fcos", vm_code)
 
     def test_expected_result_manifest_is_generated(self):
         if not self.EXPECTED_FILE.exists():

@@ -303,6 +303,59 @@ class TestSemanticAnalyzer(unittest.TestCase):
         self.assertFalse(result)
         self.assertTrue(any("Atribuição inválida" in e for e in self.analyzer.errors))
 
+    def test_parameter_constant_can_be_read_but_not_assigned(self):
+        """Testa PARAMETER como constante sem bloquear parâmetros de subrotina."""
+        from src.ast.nodes import (Program, VariableDeclaration, Assignment, Identifier, Literal)
+
+        parameter = VariableDeclaration(name="N", type_name="INTEGER", initial_value=Literal(value=10, type_name="INTEGER"))
+        parameter.is_parameter = True
+        program = Program(
+            name="test",
+            declarations=[
+                parameter,
+                VariableDeclaration(name="X", type_name="INTEGER"),
+            ],
+            statements=[
+                Assignment(target=Identifier(name="X"), value=Identifier(name="N")),
+                Assignment(target=Identifier(name="N"), value=Literal(value=2, type_name="INTEGER")),
+            ],
+            subprograms=[],
+        )
+
+        result = self.analyzer.analyze(program)
+        self.assertFalse(result)
+        self.assertTrue(any("PARAMETER 'N'" in e for e in self.analyzer.errors))
+
+    def test_error_message_includes_location_when_available(self):
+        """Testa diagnóstico semântico com linha/coluna anotadas pelo parser."""
+        from src.ast.nodes import Program, Assignment, Identifier, Literal, SourceLocation
+
+        assignment = Assignment(target=Identifier(name="X"), value=Literal(value=1, type_name="INTEGER"))
+        assignment.location = SourceLocation(line=4, column=8)
+        program = Program(name="test", declarations=[], statements=[assignment], subprograms=[])
+
+        result = self.analyzer.analyze(program)
+
+        self.assertFalse(result)
+        self.assertTrue(any("linha 4" in e and "coluna 8" in e for e in self.analyzer.errors))
+
+    def test_intrinsic_max_min_and_conversions_are_typed(self):
+        """Testa tipos de intrínsecas críticas."""
+        from src.ast.nodes import FunctionCall, Literal
+
+        cases = [
+            (FunctionCall("MAX", [Literal(1, "INTEGER"), Literal(2, "INTEGER")]), "INTEGER"),
+            (FunctionCall("MIN", [Literal(1.0, "REAL"), Literal(2, "INTEGER")]), "REAL"),
+            (FunctionCall("INT", [Literal(2.5, "REAL")]), "INTEGER"),
+            (FunctionCall("REAL", [Literal(2, "INTEGER")]), "REAL"),
+            (FunctionCall("SQRT", [Literal(4, "INTEGER")]), "REAL"),
+        ]
+
+        for node, expected_type in cases:
+            with self.subTest(function=node.function_name):
+                node.accept(self.analyzer)
+                self.assertEqual(self.analyzer._get_type(node), expected_type)
+
     def test_goto_to_defined_label(self):
         """Testa GOTO para label definido em DO loop."""
         from src.ast.nodes import (Program, VariableDeclaration, DoLoop, GotoStatement,
