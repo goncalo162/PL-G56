@@ -28,6 +28,7 @@ class TokenType(Enum):
     MINUS = "MINUS"         # -
     MULTIPLY = "MULTIPLY"   # *
     DIVIDE = "DIVIDE"       # /
+    CONCAT = "CONCAT"       # //
     POWER = "POWER"         # **
     
     # Operadores relacionais

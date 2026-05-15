@@ -42,8 +42,10 @@ from src.ast.nodes import (
     CallStatement,
     ReturnStatement,
     ContinueStatement,
+    FormatStatement,
     FunctionCall,
-    ArrayAccess
+    ArrayAccess,
+    SourceLocation,
 )
 from .grammar import PRECEDENCE
 from src.lexer.tokens import TokenType
@@ -72,6 +74,14 @@ class Parser:
         # Cria o parser PLY apenas uma vez, mantendo-o no estado do objeto.
         if not hasattr(self, 'parser') or self.parser is None:
             self.parser = yacc.yacc(module=self)
+
+    def _with_location(self, p, index, node):
+        """Anota um nó AST com linha/coluna aproximadas do token que o originou."""
+        try:
+            node.location = SourceLocation(line=p.lineno(index), column=p.lexpos(index))
+        except Exception:
+            node.location = SourceLocation(line=0, column=0)
+        return node
 
     # ====================================================
     # Regras de Estrutura Inicial
@@ -219,17 +229,44 @@ class Parser:
             p[0] = []
 
     def p_declaration(self, p):
-        '''declaration : type_spec var_list'''
+        '''declaration : type_spec var_list
+                       | DIMENSION array_list
+                       | PARAMETER LPAREN param_assign_list RPAREN
+                       | PARAMETER param_assign_list'''
         # Mapeia multiplas variáveis definidas numa mesma linha para nós independentes (ex: INTEGER A,B).
+        if p.slice[1].type == 'DIMENSION':
+            p[0] = [
+                self._with_location(p, 1, VariableDeclaration(name=var['name'], type_name="DIMENSION", dimensions=var['dims']))
+                for var in p[2]
+            ]
+            return
+
+        if p.slice[1].type == 'PARAMETER':
+            assignments = p[3] if len(p) == 5 else p[2]
+            declarations = []
+            for item in assignments:
+                for name, value in item.items():
+                    type_name = getattr(value, 'type_name', 'INTEGER')
+                    decl = VariableDeclaration(name=name, type_name=type_name, initial_value=value)
+                    decl.is_parameter = True
+                    declarations.append(self._with_location(p, 1, decl))
+            p[0] = declarations
+            return
+
         type_name = p[1]
         declarations = []
         for var in p[2]:
             if isinstance(var, dict):
-                # Array declaration
-                declarations.append(VariableDeclaration(name=var['name'], type_name=type_name, dimensions=var.get('dims')))
+                decl = VariableDeclaration(
+                    name=var['name'],
+                    type_name=type_name,
+                    dimensions=var.get('dims'),
+                    initial_value=var.get('value')
+                )
+                declarations.append(self._with_location(p, 1, decl))
             elif isinstance(var, str):
                 # Simple variable
-                declarations.append(VariableDeclaration(name=var, type_name=type_name))
+                declarations.append(self._with_location(p, 1, VariableDeclaration(name=var, type_name=type_name)))
         p[0] = declarations
 
     def p_type_spec(self, p):
@@ -237,6 +274,7 @@ class Parser:
                      | REAL
                      | LOGICAL
                      | CHARACTER
+                     | CHARACTER MULTIPLY INTEGER_LITERAL
                      | COMPLEX'''
         # Regressa imediatamente o nome literal do tipo de variável.
         p[0] = p[1]
@@ -285,6 +323,7 @@ class Parser:
                             | write_stmt
                             | call_stmt
                             | continue_stmt
+                            | format_stmt
                             | goto_stmt
                             | return_stmt
                             | stop_stmt'''        # Reconhece um statement simples sem controlo de fluxo.
@@ -305,6 +344,12 @@ class Parser:
         else:
             p[0] = PrintStatement(expressions=[])
 
+    def p_format_stmt(self, p):
+        '''format_stmt : FORMAT LPAREN format_items RPAREN
+                       | FORMAT LPAREN RPAREN'''
+        spec = p[3] if len(p) == 5 else []
+        p[0] = self._with_location(p, 1, FormatStatement(spec=spec))
+
     def p_call_stmt(self, p):
         '''call_stmt : CALL IDENTIFIER
                      | CALL IDENTIFIER LPAREN expr_list RPAREN'''
@@ -323,7 +368,7 @@ class Parser:
         '''goto_stmt : GOTO INTEGER_LITERAL
                      | GOTO LABEL'''
         # Cria um GOTO apontando para um label numérico.
-        p[0] = GotoStatement(label=p[2])
+        p[0] = self._with_location(p, 1, GotoStatement(label=p[2]))
 
     def p_return_stmt(self, p):
         '''return_stmt : RETURN'''
@@ -339,11 +384,11 @@ class Parser:
         '''assignment : IDENTIFIER ASSIGN expression
                       | IDENTIFIER LPAREN subscript_list RPAREN ASSIGN expression'''
         if len(p) == 4:
-            p[0] = Assignment(target=Identifier(name=p[1]), value=p[3])
+            p[0] = self._with_location(p, 1, Assignment(target=Identifier(name=p[1]), value=p[3]))
         else:
             # Array assignment
             target = ArrayAccess(name=p[1], indices=p[3])
-            p[0] = Assignment(target=target, value=p[6])
+            p[0] = self._with_location(p, 1, Assignment(target=target, value=p[6]))
 
     def p_subscript_list(self, p):
         '''subscript_list : expression
@@ -424,7 +469,8 @@ class Parser:
     def p_print_stmt(self, p):
         '''print_stmt : PRINT MULTIPLY COMMA expr_list
                       | PRINT MULTIPLY expr_list
-                      | PRINT MULTIPLY'''
+                      | PRINT MULTIPLY
+                      | PRINT format_spec COMMA expr_list'''
         # Constrói instruções PRINT com lista de expressões opcional.
         if len(p) == 5:
             p[0] = PrintStatement(expressions=p[4])
@@ -455,8 +501,10 @@ class Parser:
     def p_io_spec(self, p):
         '''io_spec : MULTIPLY
                    | IDENTIFIER
+                   | INTEGER_LITERAL
                    | io_spec COMMA 
-                   | io_spec COMMA IDENTIFIER'''
+                   | io_spec COMMA IDENTIFIER
+                   | io_spec COMMA INTEGER_LITERAL'''
         # Permite especificar arquivo/unidade de I/O com opções de múltiplos campos.
         p[0] = p[1]
 
@@ -506,6 +554,7 @@ class Parser:
                       | expression MULTIPLY expression
                       | expression DIVIDE expression
                       | expression POWER expression
+                      | expression CONCAT expression
                       | expression LT expression
                       | expression LE expression
                       | expression GT expression
@@ -629,8 +678,29 @@ class Parser:
 
     def p_format_spec(self, p):
         '''format_spec : MULTIPLY
+                       | INTEGER_LITERAL
+                       | LABEL
                        | STRING_LITERAL'''
         p[0] = p[1]
+
+    def p_format_items(self, p):
+        '''format_items : format_item
+                        | format_items COMMA format_item'''
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[0] = p[1] + [p[3]]
+
+    def p_format_item(self, p):
+        '''format_item : IDENTIFIER
+                       | INTEGER_LITERAL
+                       | REAL_LITERAL
+                       | STRING_LITERAL
+                       | IDENTIFIER INTEGER_LITERAL
+                       | INTEGER_LITERAL IDENTIFIER
+                       | IDENTIFIER REAL_LITERAL
+                       | INTEGER_LITERAL LPAREN format_items RPAREN'''
+        p[0] = tuple(p[1:]) if len(p) > 2 else p[1]
 
     def p_step_opt(self, p):
         '''step_opt : COMMA expression

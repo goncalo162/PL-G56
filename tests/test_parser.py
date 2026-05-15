@@ -22,7 +22,7 @@ from src.exceptions import ParserError
 from src.ast.nodes import (
     Program, VariableDeclaration, Assignment, Identifier,
     IfStatement, DoLoop, FunctionCall, BinaryOp, Literal,
-    PrintStatement, ReadStatement, FunctionDeclaration
+    PrintStatement, ReadStatement, FunctionDeclaration, FormatStatement
 )
 
 
@@ -121,6 +121,36 @@ class TestParserTypeDeclarations(unittest.TestCase):
         END"""
         ast = self._parse(code)
         self.assertIsNotNone(ast)
+
+    def test_character_declaration_with_length(self):
+        """Testa declaração CHARACTER*n de Fortran 77."""
+        code = """PROGRAM TEST
+        CHARACTER*20 NAME
+        END"""
+        ast = self._parse(code)
+        self.assertIsNotNone(ast)
+        self.assertEqual(ast.declarations[0].type_name, "CHARACTER")
+
+    def test_dimension_statement(self):
+        """Testa DIMENSION separado da declaração de tipo."""
+        code = """PROGRAM TEST
+        INTEGER A
+        DIMENSION A(3, 4)
+        END"""
+        ast = self._parse(code)
+        self.assertIsNotNone(ast)
+        self.assertEqual(ast.declarations[1].type_name, "DIMENSION")
+
+    def test_parameter_statement(self):
+        """Testa PARAMETER com constante simples."""
+        code = """PROGRAM TEST
+        PARAMETER (N = 10)
+        INTEGER X
+        X = N
+        END"""
+        ast = self._parse(code)
+        self.assertIsNotNone(ast)
+        self.assertTrue(getattr(ast.declarations[0], "is_parameter", False))
 
     def test_complex_declaration(self):
         """Testa declaração de variável COMPLEX."""
@@ -358,6 +388,17 @@ class TestParserExpressions(unittest.TestCase):
         ast = self._parse(code)
         self.assertIsNotNone(ast)
 
+    def test_string_concatenation(self):
+        """Testa concatenação CHARACTER com operador //."""
+        code = """PROGRAM TEST
+        CHARACTER A, B, C
+        C = A // B
+        END"""
+        ast = self._parse(code)
+        self.assertIsNotNone(ast)
+        self.assertIsInstance(ast.statements[0].value, BinaryOp)
+        self.assertEqual(ast.statements[0].value.operator, "//")
+
     def test_literal_logical_true(self):
         """Testa literal lógico .TRUE.."""
         code = """PROGRAM TEST
@@ -553,6 +594,17 @@ class TestParserIOOperations(unittest.TestCase):
         END"""
         ast = self._parse(code)
         self.assertIsNotNone(ast)
+
+    def test_write_with_numeric_format_label(self):
+        """Testa WRITE(*, 100) com label FORMAT."""
+        code = """PROGRAM TEST
+        INTEGER X
+        WRITE(*, 100) X
+100     FORMAT(I5)
+        END"""
+        ast = self._parse(code)
+        self.assertIsNotNone(ast)
+        self.assertIsInstance(ast.statements[1], FormatStatement)
 
     def test_read_simple(self):
         """Testa READ simples."""

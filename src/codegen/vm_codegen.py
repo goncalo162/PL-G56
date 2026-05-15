@@ -34,6 +34,7 @@ class VMCodeGenerator:
         self.next_address: int = 0
         self._function_names: set[str] = set()
         self._emitted_function_jump = False
+        self._intrinsic_label_counter = 0
 
     def generate_vm_code(self, ir_program: IRProgram) -> str:
         """Gera assembly EWVM a partir de um programa TAC."""
@@ -180,6 +181,10 @@ class VMCodeGenerator:
             return True
         return False
 
+    def _new_internal_label(self, prefix: str) -> str:
+        self._intrinsic_label_counter += 1
+        return f"__{prefix}{self._intrinsic_label_counter}"
+
     def _emit_binary_opcode(self, opcode: IROpcode, ir_program: IRProgram, arg1: Any, arg2: Any):
         """Emite uma operação binária com o mnemonic EWVM correcto."""
         self._push_operand(arg1, ir_program)
@@ -206,6 +211,7 @@ class VMCodeGenerator:
             IROpcode.EQ:  "equal",
             IROpcode.AND: "and",
             IROpcode.OR:  "or",
+            IROpcode.CONCAT: "concat",
         }
 
         float_map = {
@@ -220,6 +226,7 @@ class VMCodeGenerator:
             IROpcode.EQ:  "equal",
             IROpcode.AND: "and",
             IROpcode.OR:  "or",
+            IROpcode.CONCAT: "concat",
         }
 
         mnemonic = float_map.get(opcode) if use_float else int_map.get(opcode)
@@ -228,6 +235,69 @@ class VMCodeGenerator:
             return
 
         self._emit(mnemonic)
+
+    def _emit_min_max(self, instr: IRInstruction, ir_program: IRProgram):
+        """Emite MIN/MAX binário reavaliando o operando escolhido."""
+        choose_left = self._new_internal_label("CHOOSE_LEFT")
+        end_label = self._new_internal_label("END_MINMAX")
+
+        self._push_operand(instr.arg1, ir_program)
+        self._push_operand(instr.arg2, ir_program)
+        if instr.opcode == IROpcode.MAX:
+            self._emit("inf")
+        else:
+            self._emit("sup")
+        self._emit(f"jz {choose_left}")
+        self._push_operand(instr.arg2, ir_program)
+        self._emit(f"jump {end_label}")
+        self._emit(f"{choose_left}:")
+        self._push_operand(instr.arg1, ir_program)
+        self._emit(f"{end_label}:")
+        if instr.result:
+            self._store_result(instr.result)
+
+    def _emit_unary_intrinsic(self, instr: IRInstruction, ir_program: IRProgram):
+        """Emite intrínsecas unárias suportadas diretamente pela EWVM."""
+        if instr.opcode == IROpcode.ABS:
+            positive_label = self._new_internal_label("ABS_POS")
+            self._push_operand(instr.arg1, ir_program)
+            self._emit("dup 1")
+            self._push_operand(0, ir_program)
+            if self._should_use_float_ops(ir_program, instr.arg1, 0):
+                self._emit("finf")
+                self._emit(f"jz {positive_label}")
+                self._push_operand(-1.0, ir_program)
+                self._emit("fmul")
+            else:
+                self._emit("inf")
+                self._emit(f"jz {positive_label}")
+                self._push_operand(-1, ir_program)
+                self._emit("mul")
+            self._emit(f"{positive_label}:")
+        elif instr.opcode in {IROpcode.INT, IROpcode.NINT}:
+            self._push_operand(instr.arg1, ir_program)
+            self._emit("ftoi")
+        elif instr.opcode == IROpcode.REAL:
+            self._push_operand(instr.arg1, ir_program)
+            self._emit("itof")
+        elif instr.opcode == IROpcode.SQRT:
+            self._push_operand(instr.arg1, ir_program)
+            self._push_operand(0.5, ir_program)
+            self._emit("pow")
+        elif instr.opcode == IROpcode.SIN:
+            self._push_operand(instr.arg1, ir_program)
+            self._emit("fsin")
+        elif instr.opcode == IROpcode.COS:
+            self._push_operand(instr.arg1, ir_program)
+            self._emit("fcos")
+        elif instr.opcode in {IROpcode.EXP, IROpcode.LOG}:
+            self._emit_comment(f"intrinsic {instr.opcode.value} unavailable in EWVM primitive set")
+            self._push_operand(0.0, ir_program)
+        else:
+            self._push_operand(instr.arg1, ir_program)
+
+        if instr.result:
+            self._store_result(instr.result)
 
     def _emit_write(self, operand: Any, ir_program: IRProgram):
         """Emite WRITEI/WRITEF/WRITES conforme o tipo do operando."""
@@ -309,12 +379,15 @@ class VMCodeGenerator:
         """Traduz uma única instrução TAC para EWVM."""
         match instr.opcode:
             case (IROpcode.ADD | IROpcode.SUB | IROpcode.MUL | IROpcode.DIV |
-                  IROpcode.MOD | IROpcode.POW | IROpcode.EQ | IROpcode.NE |
+                  IROpcode.MOD | IROpcode.POW | IROpcode.CONCAT | IROpcode.EQ | IROpcode.NE |
                   IROpcode.LT | IROpcode.LE | IROpcode.GT | IROpcode.GE |
                   IROpcode.AND | IROpcode.OR):
                 self._emit_binary_opcode(instr.opcode, ir_program, instr.arg1, instr.arg2)
                 if instr.result:
                     self._store_result(instr.result)
+
+            case IROpcode.MAX | IROpcode.MIN:
+                self._emit_min_max(instr, ir_program)
 
             case IROpcode.ASSIGN:
                 self._push_operand(instr.arg1, ir_program)
@@ -332,6 +405,10 @@ class VMCodeGenerator:
                 self._emit("not")
                 if instr.result:
                     self._store_result(instr.result)
+
+            case (IROpcode.ABS | IROpcode.INT | IROpcode.REAL | IROpcode.SQRT |
+                  IROpcode.SIN | IROpcode.COS | IROpcode.EXP | IROpcode.LOG | IROpcode.NINT):
+                self._emit_unary_intrinsic(instr, ir_program)
 
             case IROpcode.LOAD_ARRAY:
                 self._emit_array_access(IROpcode.LOAD_ARRAY, instr, ir_program)
