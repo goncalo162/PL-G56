@@ -1,5 +1,52 @@
 # Gramática Fortran 77
 
+## Conceitos Importantes
+
+### ARRAYS e DIMENSION
+
+**DIMENSION** é uma declaração separada em Fortran 77 para especificar dimensões de arrays. É principalmente um artefato histórico do Fortran fixo-formato.
+
+**Duas formas equivalentes:**
+
+```fortran
+! Forma 1: DIMENSION inline (moderna, recomendada)
+INTEGER A(10, 5)              ! Array bidimensional 10×5
+REAL B(100)                   ! Array unidimensional com 100 elementos
+
+! Forma 2: DIMENSION separada (compatibilidade com código antigo)
+INTEGER A
+REAL B
+DIMENSION A(10, 5), B(100)    ! Declaração separada
+```
+
+**No compilador:** Ambas são tratadas equivalentemente. A representação interna usa:
+- `dimensions = [(1, 10), (1, 5)]` para array 10×5 (tuplas lower:upper por dimensão)
+
+### PARAMETERS vs CONSTANTS
+
+Dois conceitos **distintos** em Fortran 77:
+
+| Atributo | Significado | Exemplo |
+|----------|------------|---------|
+| **`is_parameter`** | Parâmetro formal de função/subrotina (argumento) | `SUBROUTINE FOO(X, Y)` — X e Y são parâmetros |
+| **`is_constant`** | Constante PARAMETER (imutável em compilação) | `PARAMETER (PI=3.14159)` — PI é constante |
+
+**Exemplo mostrando ambos:**
+
+```fortran
+PROGRAM TEST
+    REAL, PARAMETER :: PI = 3.14159    ! PI: is_constant=True
+    CALL CALCULAR(PI)                  ! PI: is_parameter=True (argumento)
+END
+
+SUBROUTINE CALCULAR(VALOR)
+    REAL VALOR                         ! VALOR: is_parameter=True (param. formal)
+    PRINT *, VALOR * 2.0
+END
+```
+
+Portanto, **ambos os flags podem coexistir** num símbolo.
+
 ## Formato EBNF 
 
 ### Programa e Unidades de Programa
@@ -47,10 +94,18 @@ type_spec      ::= 'INTEGER'
 var_list       ::= var_decl
                  | var_list ',' var_decl
 
+# var_decl: variável simples, array ou inicialização
+# IDENTIFIER               : simples variável (ex: X)
+# IDENTIFIER(dimension_list): array (ex: A(10, 5) ou B(1:100, 1:50))
+# IDENTIFIER=expression    : inicialização (ex: X=3.14)
 var_decl       ::= IDENTIFIER
                  | IDENTIFIER '(' dimension_list ')'
                  | IDENTIFIER '=' expression
 
+# dimension_list: especifica limites de cada dimensão
+# Formato 1: expr           — apenas tamanho, começa em 1 (ex: 10 = 1:10)
+# Formato 2: expr ':' expr  — limites explícitos (ex: 1:10, 0:99)
+# Múltiplas dimensões separadas por vírgula (ex: 10, 5 ou 1:10, 1:5)
 dimension_list ::= expression
                  | dimension_list ',' expression
                  | expression ':' expression

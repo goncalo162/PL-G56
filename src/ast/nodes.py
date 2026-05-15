@@ -27,7 +27,20 @@ class ASTNode(ABC):
 
 @dataclass
 class SourceLocation:
-    """Localização aproximada de um nó no código fonte."""
+    """
+    Localização de um nó no código fonte.
+    
+    Esta classe é usada para rastrear de onde cada nó AST foi originado,
+    facilitando mensagens de erro com contexto preciso.
+    
+    Nota: O atributo 'location' é adicionado DINAMICAMENTE a cada nó
+    durante parsing em parser.py via método _with_location().
+    Todos os nós ASTNode, embora não tenham este atributo declarado,
+    podem recebê-lo em tempo de execução.
+    
+    Exemplo:
+        node.location = SourceLocation(line=10, column=5)
+    """
     line: int
     column: int = 0
 
@@ -48,7 +61,17 @@ class Program(ASTNode):
 
 @dataclass
 class VariableDeclaration(ASTNode):
-    """Representa uma declaração de variável."""
+    """
+    Representa uma declaração de variável.
+    
+    Atributos:
+        name: Nome da variável
+        type_name: Tipo Fortran (INTEGER, REAL, LOGICAL, CHARACTER, COMPLEX)
+        dimensions: Para arrays, lista de tuplas [(lower, upper), ...] por dimensão
+                   Ex: [(1, 10), (1, 5)] para array bidimensional 10x5
+                   Exemplo Fortran: INTEGER A(10, 5) ou INTEGER A(1:10, 1:5)
+        initial_value: Expressão de inicialização (opcional)
+    """
     name: str
     type_name: str  # INTEGER, REAL, LOGICAL, CHARACTER
     dimensions: Optional[List[tuple]] = None  # Para arrays

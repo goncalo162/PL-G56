@@ -13,7 +13,25 @@ from src.exceptions import SemanticError
 
 @dataclass
 class SymbolInfo:
-    """Informação armazenada sobre um símbolo."""
+    """
+    Informação armazenada sobre um símbolo na tabela de símbolos.
+    
+    Atributos:
+        name: Nome do símbolo
+        type_name: Tipo Fortran (INTEGER, REAL, LOGICAL, CHARACTER, COMPLEX)
+        dimensions: Para arrays: lista de tuplas [(lower, upper), ...] por dimensão
+                   Ex: [(1, 10), (1, 5)] para array 10x5
+        initial_value: Valor inicial atribuído em declaração
+        is_parameter: TRUE se é um PARÂMETRO FORMAL de função/subrotina (argumento)
+                     Ex: SUBROUTINE FOO(X, Y) — X e Y têm is_parameter=True
+        is_constant: TRUE se é uma CONSTANTE PARAMETER Fortran 77 (imutável em compilação)
+                    Ex: PARAMETER (PI=3.14159) — PI tem is_constant=True
+                    Nota: Uma constante PARAMETER pode ser argumento, tendo ambos flags=True
+        is_function: TRUE se é uma função (vs variável comum)
+        return_type: Tipo de retorno se is_function=True
+        parameters: Lista de parâmetros se is_function=True
+        scope_level: Nível de escopo onde foi declarado (0=global)
+    """
     name: str
     type_name: str  # INTEGER, REAL, LOGICAL, CHARACTER, COMPLEX
     dimensions: Optional[list] = None  # Para arrays: [(1, 10), (1, 5)]
